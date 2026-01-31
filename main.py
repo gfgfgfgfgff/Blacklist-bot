@@ -1,4 +1,4 @@
-import discord
+importdiscord
 from discord.ext import commands
 import json
 import os
