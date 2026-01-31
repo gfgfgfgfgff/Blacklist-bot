@@ -1,8 +1,0 @@
-[phases.setup]
-cmds = ["pip install poetry"]
-
-[phases.install]
-cmds = ["pip install -r requirements.txt"]
-
-[start]
-cmd = "python Main.py"
