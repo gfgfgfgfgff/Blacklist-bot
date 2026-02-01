@@ -83,6 +83,11 @@ def has_specific_grade(required_grade: str):
 
 # ============ CONFIGURATION ============
 TOKEN = os.getenv("TOKEN")
+if not TOKEN:
+    print("❌ ERREUR : Le token Discord n'est pas défini !")
+    print("Assure-toi d'avoir défini la variable d'environnement 'TOKEN' sur Railway.")
+    exit(1)
+
 PREFIX = "&"
 THUMBNAIL_URL = "https://cdn.discordapp.com/attachments/1467151867191496808/1467232922938638479/IMG_1620.jpg?ex=697fa2a4&is=697e5124&hm=a712241a364f6b68dc031cac0860e5e9b9af3f2df3e69c8f3b14e1817852ccde&"
 SUPPORT_ID = 1399234120214909010
@@ -414,6 +419,7 @@ async def help(ctx):
         inline=False
     )
     embed1.set_footer(text=f"Page 1/4 • {get_current_time_french()}")
+    embed1.description += "\n\n-# Effectué la commande `&perm` pour voir votre grade et les commandes au quels vous avez accès"
 
     # Page 2 - Information
     embed2 = discord.Embed(color=0xFFFFFF)
@@ -465,7 +471,6 @@ async def help(ctx):
         inline=False
     )
     embed4.set_footer(text=f"Page 4/4 • {get_current_time_french()}")
-    embed4.description += "\n\n-# Effectué la commande `&perm` pour voir votre grade et les commandes au quels vous avez accès"
 
     view = SimplePaginator([embed1, embed2, embed3, embed4])
     await ctx.send(embed=embed1, view=view)
