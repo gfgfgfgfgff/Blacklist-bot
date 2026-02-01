@@ -1,1 +1,28 @@
-j
+{
+  "name": "compteur-bot",
+  "version": "1.0.0",
+  "description": "Bot Discord Compteur pour serveur Discord",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "compteur",
+    "counter"
+  ],
+  "author": "TonNom",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.15.3",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  },
+  "engines": {
+    "node": ">=16.11.0"
+  }
+}
