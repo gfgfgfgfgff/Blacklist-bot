@@ -169,7 +169,7 @@ def get_user_grade(member: discord.Member) -> Optional[str]:
     return highest_grade
 
 async def get_member_by_id_or_mention(ctx, identifier: str) -> Optional[discord.Member]:
-    """Récupère un membre par ID ou mention"""
+    """Récupère un membre par ID ou mention, même hors serveur"""
     try:
         # Essayer de récupérer par mention
         if identifier.startswith('<@') and identifier.endswith('>'):
@@ -178,21 +178,41 @@ async def get_member_by_id_or_mention(ctx, identifier: str) -> Optional[discord.
             # Enlever le ! si c'est une mention de nickname
             if user_id.startswith('!'):
                 user_id = user_id[1:]
-            member = ctx.guild.get_member(int(user_id))
-            if member:
-                return member
+            try:
+                user_id = int(user_id)
+            except ValueError:
+                return None
+        else:
+            # Essayer de récupérer par ID direct
+            user_id = int(identifier)
         
-        # Essayer de récupérer par ID direct
-        user_id = int(identifier)
+        # Essayer d'abord de récupérer depuis le serveur
         member = ctx.guild.get_member(user_id)
         if member:
             return member
         
-        # Essayer de fetch le membre
+        # Essayer de fetch le membre (pour ceux sur le serveur mais non cachés)
         try:
             member = await ctx.guild.fetch_member(user_id)
             return member
-        except:
+        except discord.NotFound:
+            # Membre n'est pas sur le serveur, retourner un objet User
+            try:
+                user = await bot.fetch_user(user_id)
+                # Créer un objet Member minimal avec les infos de base
+                class MinimalMember:
+                    def __init__(self, user):
+                        self.id = user.id
+                        self.name = user.name
+                        self.mention = user.mention
+                        self.display_name = user.name
+                        self.avatar = user.avatar
+                        self.bot = user.bot
+                
+                return MinimalMember(user)
+            except discord.NotFound:
+                return None
+        except discord.HTTPException:
             return None
             
     except (ValueError, discord.NotFound, discord.HTTPException):
@@ -214,6 +234,10 @@ def create_black_embed(description: str) -> discord.Embed:
     embed = discord.Embed(description=description, color=0x000000)
     return embed
 
+def create_black_embed_with_title(title: str, description: str) -> discord.Embed:
+    embed = discord.Embed(title=title, description=description, color=0x000000)
+    return embed
+
 def create_log_embed(title: str, fields: dict) -> discord.Embed:
     embed = discord.Embed(title=title, color=0x00FF00)
     for name, value in fields.items():
@@ -225,7 +249,6 @@ def create_log_embed(title: str, fields: dict) -> discord.Embed:
 def get_current_time_french():
     # Heure française (UTC+1 ou UTC+2 selon l'heure d'été)
     tz = timezone(timedelta(hours=1))  # UTC+1 (pour l'heure d'hiver)
-    # Pour l'heure d'été (UTC+2), changer hours=2
     now = datetime.now(tz)
     return now.strftime("%d/%m/%Y - %H:%M:%S")
 
@@ -719,8 +742,21 @@ async def bl(ctx, member: Optional[discord.Member] = None, *, reason: str = None
 
 @bot.command()
 @has_required_grade()
-async def unbl(ctx, identifier: str):
-    """Unblacklist un utilisateur"""
+async def unbl(ctx, identifier: str = None):
+    """Unblacklist un utilisateur par ID ou mention, même hors serveur"""
+    # Vérifier si c'est une réponse à un message
+    if ctx.message.reference and ctx.message.reference.message_id and not identifier:
+        try:
+            replied_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+            target_member = replied_message.author
+            identifier = str(target_member.id)
+        except:
+            pass
+    
+    if not identifier:
+        embed = create_black_embed_with_title("MAUVAISE UTILISATION", "Usage : `&unbl id/@`")
+        return await ctx.send(embed=embed)
+    
     # Récupérer le membre par ID ou mention
     member = await get_member_by_id_or_mention(ctx, identifier)
     
@@ -747,21 +783,24 @@ async def unbl(ctx, identifier: str):
             embed = create_red_embed(f"Vous n'avez pas les permissions nécessaires car cet utilisateur a été blacklister par un {stored_grade}.")
             return await ctx.send(embed=embed)
     
-    # Unban automatique
+    # Unban automatique si l'utilisateur est banni
+    unban_success = False
     try:
-        async for ban_entry in ctx.guild.bans():
-            if ban_entry.user.id == member.id:
-                await ctx.guild.unban(ban_entry.user, reason=f"Unblacklist par {ctx.author}")
-                unban_msg = f"{member.mention} a bien été **retiré** de la blacklist."
-                break
-        else:
+        # Essayer de trouver si l'utilisateur est banni
+        try:
+            ban_entry = await ctx.guild.fetch_ban(discord.Object(id=int(uid)))
+            await ctx.guild.unban(ban_entry.user, reason=f"Unblacklist par {ctx.author}")
+            unban_success = True
+            unban_msg = f"{member.mention} a bien été **retiré** de la blacklist et débanni."
+        except discord.NotFound:
+            # L'utilisateur n'est pas banni
             unban_msg = f"{member.mention} a bien été **retiré** de la blacklist (n'était pas banni)."
     except discord.Forbidden:
         unban_msg = f"{member.mention} a bien été **retiré** de la blacklist (pas les permissions de unban)."
     except:
         unban_msg = f"{member.mention} a bien été **retiré** de la blacklist."
     
-    # Envoi DM à la personne unblacklistée
+    # Envoi DM à la personne unblacklistée si possible
     try:
         dm_message = (
             f"Vous avez été unblacklisté de `Akusa #🎐`\n\n"
@@ -892,10 +931,44 @@ async def blinfo(ctx, identifier: str):
     
     data = bl_data[uid]
     
+    # Vérifier si la blacklist a été faite par un grade "Créateur" ou supérieur
+    # ou par l'admin, et masquer l'identité si c'est le cas
+    bl_by_grade = None
+    bl_by_id = data.get('by')
+    
+    # Essayer de récupérer le grade de la personne qui a fait la BL
+    try:
+        bl_by_member = await get_member_by_id_or_mention(ctx, str(bl_by_id))
+        if bl_by_member:
+            bl_by_grade = get_user_grade(bl_by_member)
+    except:
+        pass
+    
+    # Si pas de grade, vérifier si c'est l'admin
+    if not bl_by_grade and bl_by_id == ADMIN_USER_ID:
+        bl_by_grade = "Créateur++"  # Admin = Créateur++ pour la hiérarchie
+    
+    # Masquer l'identité si le grade est "Créateur" ou supérieur
+    hide_identity = False
+    if bl_by_grade:
+        if bl_by_grade in ["Créateur", "Créateur++"]:
+            hide_identity = True
+    
+    # Préparer l'affichage
+    if hide_identity:
+        by_display = "**Masqué**"
+        grade_display = "**Masqué**"
+    else:
+        by_display = f"<@{bl_by_id}>"
+        grade_display = data.get('grade', 'Inconnu')
+        if grade_display == "None":
+            grade_display = "Aucun grade"
+    
     embed = create_white_embed(
         f"BLACKLIST INFO\n\n"
         f"Blacklist : {member.mention}\n\n"
-        f"Par : <@{data['by']}> ({data['grade']})\n\n"
+        f"Par : {by_display}\n"
+        f"Grade : {grade_display}\n\n"
         f"Raison du BL :\n{data['reason']}\n\n"
         f"Date : {data['timestamp']}"
     )
@@ -903,14 +976,90 @@ async def blinfo(ctx, identifier: str):
         embed.set_thumbnail(url=member.avatar.url)
     await ctx.send(embed=embed)
 
+# ============ NOUVELLE COMMANDE GRADE ============
+@bot.command()
+@has_required_grade()
+async def grade(ctx, identifier: str = None):
+    """Voir le grade d'un utilisateur"""
+    # Vérifier si c'est une réponse à un message
+    if ctx.message.reference and ctx.message.reference.message_id and not identifier:
+        try:
+            replied_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+            target_member = replied_message.author
+            identifier = str(target_member.id)
+        except:
+            pass
+    
+    if not identifier:
+        # Voir son propre grade
+        target_member = ctx.author
+    else:
+        # Récupérer le membre par ID ou mention
+        target_member = await get_member_by_id_or_mention(ctx, identifier)
+        
+        if not target_member:
+            embed = create_red_embed("Utilisateur introuvable.")
+            return await ctx.send(embed=embed)
+    
+    # Vérifier le grade
+    grade = get_user_grade(target_member)
+    
+    if grade:
+        embed = create_black_embed(f"{target_member.mention} a le grade **{grade}**")
+    else:
+        embed = create_black_embed(f"{target_member.mention} n'a aucun grade de la hiérarchie")
+    
+    await ctx.send(embed=embed)
+
+# ============ NOUVELLE COMMANDE LIMITS ============
+@bot.command()
+@has_required_grade()
+async def limits(ctx):
+    """Affiche les limites de blacklist par grade par heure"""
+    lines = ["LIMITES DE BLACKLIST PAR HEURE\n"]
+    
+    for grade, limit in sorted(BL_LIMITS.items(), key=lambda x: GRADES.get(x[0], 0), reverse=True):
+        emoji = {
+            "Créateur++": "👑",
+            "Créateur": "⭐",
+            "Sys+": "🛠️",
+            "Sys": "🔧",
+            "Owner": "👑"
+        }.get(grade, "•")
+        
+        if limit == 9999:
+            limit_display = "Illimité"
+        else:
+            limit_display = str(limit)
+        
+        lines.append(f"{emoji} **{grade}** : {limit_display} BL/heure")
+    
+    lines.append(f"\n_Cooldown : 2 heures (7200 secondes)_")
+    lines.append(f"_Admin et whitelistés : pas de limites_")
+    
+    embed = create_white_embed("\n".join(lines))
+    await ctx.send(embed=embed)
+
 # ============ COMMANDES WHITELIST ============
 @bot.command()
 @has_specific_grade("Créateur++")
-async def wl(ctx, member: discord.Member):
+async def wl(ctx, member: discord.Member = None):
     """Ajouter un utilisateur à la whitelist"""
     # L'admin peut aussi utiliser cette commande
     if ctx.author.id != ADMIN_USER_ID and get_user_grade(ctx.author) != "Créateur++":
         embed = create_black_embed("Malheureusement tu n'as pas les permissions nécessaires")
+        return await ctx.send(embed=embed)
+    
+    # Vérifier si c'est une réponse à un message
+    if ctx.message.reference and ctx.message.reference.message_id and not member:
+        try:
+            replied_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+            member = replied_message.author
+        except:
+            pass
+    
+    if not member:
+        embed = create_black_embed_with_title("MAUVAISE UTILISATION", "Usage : `&wl id/@`")
         return await ctx.send(embed=embed)
     
     if is_in_whitelist(str(member.id)):
@@ -929,11 +1078,23 @@ async def wl(ctx, member: discord.Member):
 
 @bot.command()
 @has_specific_grade("Créateur++")
-async def unwl(ctx, member: discord.Member):
+async def unwl(ctx, member: discord.Member = None):
     """Retirer un utilisateur de la whitelist"""
     # L'admin peut aussi utiliser cette commande
     if ctx.author.id != ADMIN_USER_ID and get_user_grade(ctx.author) != "Créateur++":
         embed = create_black_embed("Malheureusement tu n'as pas les permissions nécessaires")
+        return await ctx.send(embed=embed)
+    
+    # Vérifier si c'est une réponse à un message
+    if ctx.message.reference and ctx.message.reference.message_id and not member:
+        try:
+            replied_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+            member = replied_message.author
+        except:
+            pass
+    
+    if not member:
+        embed = create_black_embed_with_title("MAUVAISE UTILISATION", "Usage : `&unwl id/@`")
         return await ctx.send(embed=embed)
     
     removed = remove_from_whitelist(str(member.id))
@@ -1122,8 +1283,31 @@ async def logs(ctx):
 # ============ COMMANDES ATTRIBUTION DE GRADES ============
 @bot.command()
 @has_required_grade()
-async def rank(ctx, member: discord.Member, grade: str):
-    """Donner un grade à un utilisateur"""
+async def rank(ctx, member: discord.Member = None, grade: str = None):
+    """Donner un grade à un utilisateur (peut répondre au message)"""
+    # Vérifier si c'est une réponse à un message
+    if ctx.message.reference and ctx.message.reference.message_id and not member and not grade:
+        try:
+            replied_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+            member = replied_message.author
+            # Extraire le grade depuis le message
+            content = ctx.message.content
+            parts = content.split()
+            if len(parts) >= 2:
+                grade = parts[1]
+        except:
+            pass
+    elif ctx.message.reference and ctx.message.reference.message_id and member and not grade:
+        # Si le membre est mentionné mais pas le grade
+        content = ctx.message.content
+        parts = content.split()
+        if len(parts) >= 3:
+            grade = parts[2]
+    
+    if not member or not grade:
+        embed = create_red_embed("**Usage Incorrecte**\nUsage : `&rank @user/id grade`\nGrades : owner, sys, sys+, crea, crea++")
+        return await ctx.send(embed=embed)
+    
     grade = grade.lower()
     valid_grades = ["owner", "sys", "sys+", "crea", "crea++"]
     
@@ -1159,6 +1343,15 @@ async def rank(ctx, member: discord.Member, grade: str):
             embed = create_black_embed("Malheureusement tu n'as pas les permissions nécessaires")
             return await ctx.send(embed=embed)
     
+    # Vérification qu'on ne donne pas un grade égal ou supérieur au sien
+    if ctx.author.id != ADMIN_USER_ID:
+        executor_grade_value = GRADES[executor_grade]
+        target_grade_value = GRADES[get_grade_name_from_key(grade)]
+        
+        if target_grade_value >= executor_grade_value:
+            embed = create_black_embed("Tu ne peux pas donner un grade égal ou supérieur au tien")
+            return await ctx.send(embed=embed)
+    
     # Récupérer le rôle
     role_id = GRADE_TO_ROLE_ID.get(grade)
     if not role_id:
@@ -1181,15 +1374,7 @@ async def rank(ctx, member: discord.Member, grade: str):
                 if other_role and other_role in member.roles:
                     await member.remove_roles(other_role)
         
-        grade_name_map = {
-            "owner": "Owner",
-            "sys": "Sys",
-            "sys+": "Sys+",
-            "crea": "Créateur",
-            "crea++": "Créateur++"
-        }
-        
-        grade_display = grade_name_map.get(grade, grade)
+        grade_display = get_grade_name_from_key(grade)
         embed = create_green_embed(f"{member.mention} a bien reçu le grade {grade_display}")
         await ctx.send(embed=embed)
         
@@ -1207,6 +1392,17 @@ async def rank(ctx, member: discord.Member, grade: str):
     except discord.HTTPException:
         embed = create_red_embed("Erreur technique. Impossible d'ajouter le rôle.")
         await ctx.send(embed=embed)
+
+def get_grade_name_from_key(grade_key: str) -> str:
+    """Convertit une clé de grade en nom affichable"""
+    grade_map = {
+        "owner": "Owner",
+        "sys": "Sys",
+        "sys+": "Sys+",
+        "crea": "Créateur",
+        "crea++": "Créateur++"
+    }
+    return grade_map.get(grade_key, grade_key)
 
 # ============ COMMANDE CHANGELIMIT ============
 @bot.command()
@@ -1230,15 +1426,7 @@ async def changelimit(ctx, grade: str, limit: int):
         return await ctx.send(embed=embed)
     
     # Convertir le grade du format commande vers format affichage
-    grade_map = {
-        "owner": "Owner",
-        "sys": "Sys",
-        "sys+": "Sys+",
-        "crea": "Créateur",
-        "crea++": "Créateur++"
-    }
-    
-    grade_display = grade_map.get(grade, grade)
+    grade_display = get_grade_name_from_key(grade)
     
     # Mettre à jour la limite
     BL_LIMITS[grade_display] = limit
