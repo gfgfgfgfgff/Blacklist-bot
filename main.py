@@ -720,7 +720,7 @@ async def bl(ctx, member: Optional[discord.Member] = None, *, reason: str = None
     # Envoi DM à la personne blacklistée
     try:
         dm_message = (
-            f"Vous avez été blacklisté de `Akusa #🎐` pour `{reason}`\n\n"
+            f"Vous avez été blacklisté de `Akusa` #🎐 pour `{reason}`\n\n"
             f"Rejoignez le serveur prison d'Akusa pour vous faire unbl\n"
             f"lien : https://discord.gg/Cr8K2N48fe"
         )
@@ -803,9 +803,8 @@ async def unbl(ctx, identifier: str = None):
     # Envoi DM à la personne unblacklistée si possible
     try:
         dm_message = (
-            f"Vous avez été unblacklisté de `Akusa #🎐`\n\n"
-            f"Vous pouvez désormais revenir sur le serveur.\n"
-            f"Lien d'invitation : https://discord.gg/TfSDNp3V2x"
+            f"Vous avez été unbl de `Akusa` #🎐\n\n"
+            f"Voici le lien du serveur : https://discord.gg/fH2ur9ffSa"
         )
         await member.send(dm_message)
     except:
@@ -1016,7 +1015,7 @@ async def grade(ctx, identifier: str = None):
 @has_required_grade()
 async def limits(ctx):
     """Affiche les limites de blacklist par grade par heure"""
-    lines = ["LIMITES DE BLACKLIST PAR HEURE\n"]
+    lines = []
     
     for grade, limit in sorted(BL_LIMITS.items(), key=lambda x: GRADES.get(x[0], 0), reverse=True):
         emoji = {
@@ -1034,8 +1033,7 @@ async def limits(ctx):
         
         lines.append(f"{emoji} **{grade}** : {limit_display} BL/heure")
     
-    lines.append(f"\n_Cooldown : 2 heures (7200 secondes)_")
-    lines.append(f"_Admin et whitelistés : pas de limites_")
+    lines.append(f"\n> La limite de bl par heure ce reset toute les **2 heures**")
     
     embed = create_white_embed("\n".join(lines))
     await ctx.send(embed=embed)
