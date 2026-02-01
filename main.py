@@ -163,7 +163,7 @@ def get_user_grade(member: discord.Member) -> Optional[str]:
     
     return highest_grade
 
-def get_member_by_id_or_mention(ctx, identifier: str) -> Optional[discord.Member]:
+async def get_member_by_id_or_mention(ctx, identifier: str) -> Optional[discord.Member]:
     """Récupère un membre par ID ou mention"""
     try:
         # Essayer de récupérer par mention
@@ -592,24 +592,20 @@ async def myrole(ctx):
 # ============ COMMANDES BLACKLIST MODIFIÉES (AVEC SUPPORT ID) ============
 @bot.command()
 @has_required_grade()
-async def bl(ctx, identifier: Optional[str] = None, *, reason: str = None):
+async def bl(ctx, member: Optional[discord.Member] = None, *, reason: str = None):
     """Blacklist un utilisateur avec raison (peut utiliser ID ou mention)"""
     # Vérifier si c'est une réponse à un message
     if ctx.message.reference and ctx.message.reference.message_id:
         try:
             replied_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
-            member = replied_message.author
+            target_member = replied_message.author
         except:
-            member = None
+            target_member = None
     else:
-        member = None
+        target_member = member
     
-    # Si pas de réponse, chercher par identifiant
-    if not member and identifier:
-        member = await get_member_by_id_or_mention(ctx, identifier)
-    
-    # Vérifications
-    if not member:
+    # Si pas de réponse et pas de membre spécifié
+    if not target_member:
         embed = create_red_embed("**__Usage Incorrecte__**\nUsage : `&bl id/@ raison`")
         return await ctx.send(embed=embed)
     
@@ -619,11 +615,11 @@ async def bl(ctx, identifier: Optional[str] = None, *, reason: str = None):
     
     # Vérification des grades
     executor_grade = get_user_grade(ctx.author)
-    target_grade = get_user_grade(member)
+    target_grade = get_user_grade(target_member)
     
     # L'admin peut tout blacklist sauf lui-même
     if ctx.author.id == ADMIN_USER_ID:
-        if member.id == ADMIN_USER_ID:
+        if target_member.id == ADMIN_USER_ID:
             embed = create_red_embed("Tu ne peux pas te blacklist toi-même.")
             return await ctx.send(embed=embed)
         # L'admin peut blacklist n'importe qui
@@ -639,7 +635,7 @@ async def bl(ctx, identifier: Optional[str] = None, *, reason: str = None):
     
     # Vérifier la limite BL (sauf pour l'admin)
     if ctx.author.id != ADMIN_USER_ID:
-        can_bl, error_msg = check_bl_limit(ctx.author.id, executor_grade)
+        can_bl, error_msg = check_bl_limit(str(ctx.author.id), executor_grade)
         if not can_bl:
             embed = create_red_embed(error_msg)
             return await ctx.send(embed=embed)
@@ -657,7 +653,7 @@ async def bl(ctx, identifier: Optional[str] = None, *, reason: str = None):
     
     # Ban automatique
     try:
-        await member.ban(reason=f"Blacklist par {ctx.author}: {reason}")
+        await target_member.ban(reason=f"Blacklist par {ctx.author}: {reason}")
         ban_success = True
     except discord.Forbidden:
         ban_success = False
@@ -666,7 +662,7 @@ async def bl(ctx, identifier: Optional[str] = None, *, reason: str = None):
     
     # Sauvegarde blacklist
     bl_data = load_json(BLACKLIST_FILE)
-    bl_data[str(member.id)] = {
+    bl_data[str(target_member.id)] = {
         "grade": target_grade if target_grade != "Aucun grade" else "None",
         "reason": reason,
         "by": ctx.author.id,
@@ -677,7 +673,7 @@ async def bl(ctx, identifier: Optional[str] = None, *, reason: str = None):
     
     # Incrémenter le compteur BL (sauf pour l'admin)
     if ctx.author.id != ADMIN_USER_ID:
-        increment_bl_count(ctx.author.id)
+        increment_bl_count(str(ctx.author.id))
     
     # Envoi DM à la personne blacklistée
     try:
@@ -686,19 +682,19 @@ async def bl(ctx, identifier: Optional[str] = None, *, reason: str = None):
             f"Rejoignez le serveur prison d'Akusa pour vous faire unbl\n"
             f"lien : https://discord.gg/Cr8K2N48fe"
         )
-        await member.send(dm_message)
+        await target_member.send(dm_message)
     except:
         pass
     
     # Réponse publique
-    embed = create_green_embed(f"{member.mention} a été blacklister par {ctx.author.mention}\nRaison : `{reason}`")
+    embed = create_green_embed(f"{target_member.mention} a été blacklister par {ctx.author.mention}\nRaison : `{reason}`")
     await ctx.send(embed=embed)
     
     # Log
     executor_display = "ADMIN SPÉCIAL" if ctx.author.id == ADMIN_USER_ID else f"{executor_grade}"
     await send_log(ctx, "bl", {
         "Blacklist par": f"{ctx.author.mention} ({executor_display})",
-        "Utilisateur BL": member.mention,
+        "Utilisateur BL": target_member.mention,
         "Raison": reason
     })
 
