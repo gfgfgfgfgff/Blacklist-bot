@@ -1,5 +1,4 @@
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
-require('dotenv').config();
 
 // Création du client Discord
 const client = new Client({
@@ -12,12 +11,15 @@ const client = new Client({
 
 // Variables pour le compteur
 let count = 0;
-const channelId = 'ID_DU_CHANNEL'; // Remplace par l'ID du channel où compter
+const channelId = 'ID_DU_CHANNEL'; // À remplacer par l'ID du channel
 
 // Quand le bot est prêt
 client.once('ready', () => {
     console.log(`✅ ${client.user.tag} est connecté !`);
     console.log(`📊 Bot compteur actif dans le channel : ${channelId}`);
+    
+    // Optionnel : mettre un statut
+    client.user.setActivity('!help pour les commandes', { type: 'WATCHING' });
 });
 
 // Commande !count
@@ -58,10 +60,24 @@ client.on('messageCreate', async message => {
     }
 });
 
-// Connexion avec le token
-const token = process.env.TOKEN || 'TON_TOKEN_ICI';
+// Récupérer le token depuis les variables d'environnement (Railway)
+const token = process.env.TOKEN || process.env.DISCORD_TOKEN;
+
+if (!token) {
+    console.error('❌ ERREUR : Token Discord non trouvé dans les variables d\'environnement !');
+    console.log('ℹ️ Sur Railway, ajoute une variable TOKEN ou DISCORD_TOKEN');
+    process.exit(1);
+}
+
 client.login(token);
 
 // Gestion des erreurs
 client.on('error', console.error);
 process.on('unhandledRejection', console.error);
+
+// Gestion propre de l'arrêt
+process.on('SIGINT', () => {
+    console.log('🛑 Arrêt du bot...');
+    client.destroy();
+    process.exit(0);
+});
