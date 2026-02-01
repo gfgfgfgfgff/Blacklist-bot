@@ -1,17 +1,17 @@
-const { Client, GatewayIntentBits, EmbedBuilder, PermissionsBitField } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, PermissionsBitField, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 // Création du client Discord
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers
     ]
 });
 
 // Variables pour le compteur
 let count = 0;
-const channelId = 'ID_DU_CHANNEL'; // À REMPLACER par l'ID réel du channel
 
 // Quand le bot est prêt
 client.once('ready', () => {
@@ -19,15 +19,123 @@ client.once('ready', () => {
     console.log(`📊 Bot compteur actif`);
     
     // Optionnel : mettre un statut
-    client.user.setActivity('!help pour les commandes', { type: 3 }); // type: 3 = WATCHING
+    client.user.setActivity('/panel pour admin', { type: 3 });
 });
 
-// Commande !count
+// Commande /panel (admin seulement)
 client.on('messageCreate', async (message) => {
-    // Éviter les boucles avec les autres bots
     if (message.author.bot) return;
-
-    // Incrémenter le compteur
+    
+    // Vérifier si c'est la commande /panel
+    if (message.content.toLowerCase() === '/panel') {
+        
+        // Vérifier les permissions administrateur
+        if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+            const embed = new EmbedBuilder()
+                .setColor('#ff0000')
+                .setTitle('❌ Accès refusé')
+                .setDescription('Seuls les administrateurs peuvent utiliser cette commande.')
+                .setTimestamp();
+            
+            return message.channel.send({ embeds: [embed] }).then(msg => {
+                setTimeout(() => msg.delete(), 5000);
+            });
+        }
+        
+        // Créer le panel admin
+        const panelEmbed = new EmbedBuilder()
+            .setColor('#5865F2')
+            .setTitle('🛠️ PANEL ADMIN - BOT COMPTEUR')
+            .setDescription('Gestion du bot compteur')
+            .addFields(
+                { name: '📊 Compteur actuel', value: `**${count}**`, inline: true },
+                { name: '🔄 Commandes', value: '!count - !reset - !help', inline: true },
+                { name: '👥 Utilisation', value: `${message.guild.memberCount} membres`, inline: true }
+            )
+            .setFooter({ text: `Panel demandé par ${message.author.username}` })
+            .setTimestamp();
+        
+        // Créer les boutons
+        const row = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId('reset_count')
+                    .setLabel('🔄 Réinitialiser')
+                    .setStyle(ButtonStyle.Danger),
+                new ButtonBuilder()
+                    .setCustomId('show_stats')
+                    .setLabel('📈 Statistiques')
+                    .setStyle(ButtonStyle.Primary),
+                new ButtonBuilder()
+                    .setCustomId('close_panel')
+                    .setLabel('❌ Fermer')
+                    .setStyle(ButtonStyle.Secondary)
+            );
+        
+        // Envoyer le panel
+        const panelMessage = await message.channel.send({
+            embeds: [panelEmbed],
+            components: [row]
+        });
+        
+        // Collecteur d'interactions pour les boutons
+        const collector = panelMessage.createMessageComponentCollector({
+            time: 60000 // 1 minute
+        });
+        
+        collector.on('collect', async (interaction) => {
+            // Vérifier à nouveau les permissions admin
+            if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+                return interaction.reply({
+                    content: '❌ Permission refusée.',
+                    ephemeral: true
+                });
+            }
+            
+            if (interaction.customId === 'reset_count') {
+                count = 0;
+                await interaction.reply({
+                    content: '✅ Compteur réinitialisé à **0** !',
+                    ephemeral: true
+                });
+                
+                // Mettre à jour l'embed
+                panelEmbed.spliceFields(0, 1, { name: '📊 Compteur actuel', value: `**${count}**`, inline: true });
+                await interaction.message.edit({ embeds: [panelEmbed] });
+                
+            } else if (interaction.customId === 'show_stats') {
+                const statsEmbed = new EmbedBuilder()
+                    .setColor('#00ff00')
+                    .setTitle('📈 Statistiques')
+                    .addFields(
+                        { name: 'Compteur', value: `${count}` },
+                        { name: 'Serveur', value: `${message.guild.name}` },
+                        { name: 'Membres', value: `${message.guild.memberCount}` }
+                    )
+                    .setTimestamp();
+                
+                await interaction.reply({
+                    embeds: [statsEmbed],
+                    ephemeral: true
+                });
+                
+            } else if (interaction.customId === 'close_panel') {
+                await interaction.message.delete();
+                await interaction.reply({
+                    content: '✅ Panel fermé.',
+                    ephemeral: true
+                });
+            }
+        });
+        
+        collector.on('end', collected => {
+            console.log(`Collecteur terminé. ${collected.size} interactions`);
+        });
+        
+        return;
+    }
+    
+    // Commandes normales (garder les anciennes)
     if (message.content.toLowerCase() === '!count') {
         count++;
         
@@ -41,9 +149,7 @@ client.on('messageCreate', async (message) => {
         await message.channel.send({ embeds: [embed] });
     }
 
-    // Réinitialiser le compteur (admin uniquement)
     if (message.content.toLowerCase() === '!reset') {
-        // Vérifier les permissions
         if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
             return message.channel.send('❌ Tu n\'as pas la permission de réinitialiser le compteur !');
         }
@@ -52,64 +158,39 @@ client.on('messageCreate', async (message) => {
         await message.channel.send('🔄 Compteur réinitialisé à **0** !');
     }
 
-    // Afficher l'aide
-    if (message.content.toLowerCase() === '!help' || message.content.toLowerCase() === '!commands') {
+    if (message.content.toLowerCase() === '!help') {
         const helpEmbed = new EmbedBuilder()
             .setColor('#0099ff')
             .setTitle('🤖 Commandes du Bot Compteur')
             .addFields(
                 { name: '!count', value: 'Incrémente et affiche le compteur', inline: true },
-                { name: '!reset', value: 'Réinitialise le compteur (Admin uniquement)', inline: true },
+                { name: '!reset', value: 'Réinitialise le compteur (Admin)', inline: true },
+                { name: '/panel', value: 'Panel de contrôle admin', inline: true },
                 { name: '!help', value: 'Affiche cette aide', inline: true }
-            )
-            .setFooter({ text: 'Bot développé avec Discord.js v14' })
-            .setTimestamp();
+            );
 
         await message.channel.send({ embeds: [helpEmbed] });
     }
 });
 
-// Récupérer le token depuis les variables d'environnement
+// Récupérer le token depuis Railway
 const token = process.env.TOKEN || process.env.DISCORD_TOKEN;
 
 if (!token) {
-    console.error('❌ ERREUR : Token Discord non trouvé !');
-    console.log('ℹ️ Configure une variable d\'environnement TOKEN ou DISCORD_TOKEN');
+    console.error('❌ Token Discord non trouvé !');
     console.log('ℹ️ Sur Railway : Variables > Ajouter TOKEN');
     process.exit(1);
 }
 
-// Connexion
 client.login(token)
     .then(() => {
         console.log('🔗 Connexion au Discord API...');
     })
     .catch((error) => {
         console.error('❌ Erreur de connexion :', error.message);
-        if (error.message.includes('token')) {
-            console.log('⚠️ Vérifie que ton token Discord est correct');
-        }
         process.exit(1);
     });
 
 // Gestion des erreurs
-client.on('error', (error) => {
-    console.error('❌ Erreur Discord.js :', error);
-});
-
-process.on('unhandledRejection', (error) => {
-    console.error('❌ Erreur non gérée :', error);
-});
-
-// Gestion propre de l'arrêt
-process.on('SIGINT', () => {
-    console.log('🛑 Arrêt du bot...');
-    client.destroy();
-    process.exit(0);
-});
-
-process.on('SIGTERM', () => {
-    console.log('🛑 Arrêt du bot (SIGTERM)...');
-    client.destroy();
-    process.exit(0);
-});
+client.on('error', console.error);
+process.on('unhandledRejection', console.error);
