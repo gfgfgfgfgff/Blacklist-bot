@@ -3,12 +3,12 @@ from discord.ext import commands
 import json
 import os
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 # ============ PAGINATION SIMPLE ============
 class SimplePaginator(discord.ui.View):
-    def __init__(self, embeds, timeout=60):
+    def __init__(self, embeds, timeout=3600):  # 1 heure = 3600 secondes
         super().__init__(timeout=timeout)
         self.embeds = embeds
         self.current_page = 0
@@ -55,16 +55,16 @@ def has_specific_grade(required_grade: str):
 # ============ CONFIGURATION ============
 TOKEN = os.getenv("TOKEN")
 PREFIX = "&"
-THUMBNAIL_URL = "https://cdn.discordapp.com/attachments/1467065928024985815/1467071653023453308/IMG_9048.jpg"
+THUMBNAIL_URL = "https://cdn.discordapp.com/attachments/1467151867191496808/1467232922938638479/IMG_1620.jpg?ex=697fa2a4&is=697e5124&hm=a712241a364f6b68dc031cac0860e5e9b9af3f2df3e69c8f3b14e1817852ccde&"
 SUPPORT_ID = 1399234120214909010
-LOG_THUMBNAIL = "https://cdn.discordapp.com/attachments/1466619652288417901/1467113570969063534/IMG_1620.jpg"
+LOG_THUMBNAIL = THUMBNAIL_URL
 
 # IDs des rôles
-CREATOR_PP_ROLE_ID = 1466459905736183879
-CREATOR_ROLE_ID = 1466460761764265984
-SYS_PLUS_ROLE_ID = 1466515541828309195
-SYS_ROLE_ID = 1466462217808642263
-OWNER_ROLE_ID = 1466773492388073482
+CREATOR_PP_ROLE_ID = 1466459905736183879  # @Compte Couronne
+CREATOR_ROLE_ID = 1466514624718307562     # @<3
+SYS_PLUS_ROLE_ID = 1466515541828309195    # @Akusa
+SYS_ROLE_ID = 1466462217808642263         # @2026
+OWNER_ROLE_ID = 1466773492388073482       # @⚫️ ╏ Perm Bl
 
 # ============ INITIALISATION ============
 intents = discord.Intents.all()
@@ -120,36 +120,32 @@ def get_user_grade(member: discord.Member) -> Optional[str]:
             return ROLE_IDS_TO_GRADES[role.id]
     return None
 
-def create_black_embed(description: str) -> discord.Embed:
-    embed = discord.Embed(description=description, color=0x000000)
-    embed.set_footer(text=get_current_time())
-    return embed
-
 def create_white_embed(description: str) -> discord.Embed:
     embed = discord.Embed(description=description, color=0xFFFFFF)
-    embed.set_footer(text=get_current_time())
     return embed
 
-def create_red_embed(title: str = None, description: str = None) -> discord.Embed:
-    embed = discord.Embed(color=0xFF0000)
-    if title:
-        embed.title = title
-    if description:
-        embed.description = description
-    embed.set_thumbnail(url=THUMBNAIL_URL)
+def create_green_embed(description: str) -> discord.Embed:
+    embed = discord.Embed(description=description, color=0x00FF00)
     return embed
 
-def create_green_log_embed(title: str, fields: dict, thumbnail_url: str = None) -> discord.Embed:
+def create_red_embed(description: str) -> discord.Embed:
+    embed = discord.Embed(description=description, color=0xFF0000)
+    return embed
+
+def create_log_embed(title: str, fields: dict) -> discord.Embed:
     embed = discord.Embed(title=title, color=0x00FF00)
     for name, value in fields.items():
         embed.add_field(name=name, value=value, inline=False)
-    if thumbnail_url:
-        embed.set_thumbnail(url=thumbnail_url)
-    embed.set_footer(text=get_current_time())
+    embed.set_thumbnail(url=LOG_THUMBNAIL)
+    embed.set_footer(text=get_current_time_french())
     return embed
 
-def get_current_time():
-    return datetime.now().strftime("%d/%m/%Y - %H:%M:%S")
+def get_current_time_french():
+    # Heure française (UTC+1 ou UTC+2 selon l'heure d'été)
+    tz = timezone(timedelta(hours=1))  # UTC+1 (pour l'heure d'hiver)
+    # Pour l'heure d'été (UTC+2), changer hours=2
+    now = datetime.now(tz)
+    return now.strftime("%d/%m/%Y - %H:%M:%S")
 
 # ============ LIMITES BLACKLIST ============
 BL_LIMITS = {
@@ -201,7 +197,7 @@ def increment_bl_count(user_id: str):
     save_json(BL_LIMITS_FILE, data)
 
 # ============ LOGS ============
-async def send_log(ctx, log_type: str, fields: dict, thumbnail_url: str = None):
+async def send_log(ctx, log_type: str, fields: dict):
     logs_data = load_json(LOGS_FILE)
     guild_id = str(ctx.guild.id)
     
@@ -223,15 +219,15 @@ async def send_log(ctx, log_type: str, fields: dict, thumbnail_url: str = None):
             return
     
     title_map = {
-        "bl": "**__BL__**",
-        "unbl": "**__UNBL__**",
+        "bl": "BL",
+        "unbl": "UNBL",
         "rank": "ATTRIBUTION DE GRADE",
-        "wl": "**__WL__**",
-        "unwl": "**__UNWL__**"
+        "wl": "WL",
+        "unwl": "UNWL"
     }
     
     title = title_map.get(log_type, log_type.upper())
-    embed = create_green_log_embed(title, fields, thumbnail_url)
+    embed = create_log_embed(title, fields)
     
     try:
         await channel.send(embed=embed)
@@ -308,62 +304,84 @@ async def on_ready():
 @bot.command()
 @has_required_grade()
 async def help(ctx):
-    # Page 1
-    embed1 = create_red_embed()
-    embed1.title = "🤖 BOT BLACKLIST"
-    embed1.description = "📍 **Page 1/2 - MODÉRATION**\n"
+    # Page 1 - Modération
+    embed1 = discord.Embed(color=0xFFFFFF)
+    embed1.description = "Page 1/4 - Modération\n"
     embed1.add_field(
-        name="🔨 **Commandes de Modération**",
+        name="Modération",
         value=(
-            "• `&bl @user raison` - Blacklist\n"
-            "• `&unbl @user` - Unblacklist\n"
-            "• `&bllist` - Liste des blacklist\n"
-            "• `&blinfo @user` - Infos blacklist"
+            "`&bl @user raison` - Blacklist\n"
+            "`&unbl @user` - Unblacklist\n"
+            "`&bllist` - Liste des blacklist\n"
+            "`&blinfo @user` - Infos blacklist\n"
+            "`&myrole` - Vérifier ses rôles\n"
+            "`&ping` - Vérifier la latence"
         ),
         inline=False
     )
-    
-    # Page 2
-    embed2 = create_red_embed()
-    embed2.title = "🤖 BOT BLACKLIST"
-    embed2.description = "📍 **Page 2/2 - INFORMATION**\n"
+    embed1.set_footer(text=f"Page 1/4 • {get_current_time_french()}")
+
+    # Page 2 - Information
+    embed2 = discord.Embed(color=0xFFFFFF)
+    embed2.description = "Page 2/4 - Information\n"
     embed2.add_field(
-        name="📊 **Commandes d'information**",
+        name="Informations",
         value=(
-            "• `&grades` - Hiérarchie des grades\n"
-            "• `&myrole` - Vérifier ses rôles\n"
-            "• `&wllist` - Voir les whitelists"
+            "`&grades` - Hiérarchie des grades\n"
+            "`&perm` - Voir les permissions par grade\n"
+            "`&wllist` - Voir les whitelists\n"
+            "`&logs` - Configuration des logs"
         ),
         inline=False
     )
-    embed2.add_field(
-        name="👑 **Créateur++ uniquement**",
+    embed2.set_footer(text=f"Page 2/4 • {get_current_time_french()}")
+
+    # Page 3 - Modification des grades
+    embed3 = discord.Embed(color=0xFFFFFF)
+    embed3.description = "Page 3/4 - Modification des grades\n"
+    embed3.add_field(
+        name="Modification des grades",
         value=(
-            "• `&setlogs #salon` - Configurer logs\n"
-            "• `&wl @user type` - Whitelist\n"
-            "• `&unwl @user` - Retirer WL"
+            "`&rank @user grade` - Donner un grade\n"
+            "  _(owner, sys, sys+, crea, crea++)_\n"
+            "`&changelimit grade nombre` - Changer limite"
         ),
         inline=False
     )
-    embed2.add_field(
-        name="🎖️ **Attribution de grades**",
+    embed3.set_footer(text=f"Page 3/4 • {get_current_time_french()}")
+
+    # Page 4 - Créateur++ uniquement
+    embed4 = discord.Embed(color=0xFFFFFF)
+    embed4.description = "Page 4/4 - Créateur++ uniquement\n"
+    embed4.add_field(
+        name="Commandes réservées",
         value=(
-            "• `&rank @user grade` - Donner un grade\n"
-            "  _(owner, sys, sys+)_"
+            "`&wl @user type` - Whitelist\n"
+            "`&unwl @user` - Retirer WL\n"
+            "`&unblall` - Tout unblacklist\n"
+            "`&setlogs #salon` - Configurer logs\n"
+            "`&setlogsbl #salon` - Logs BL\n"
+            "`&setlogsunbl #salon` - Logs UNBL\n"
+            "`&setlogsrank #salon` - Logs RANK\n"
+            "`&setlogswl #salon` - Logs WL\n"
+            "`&setlogsunwl #salon` - Logs UNWL\n"
+            "`&help_logs` - Aide logs"
         ),
         inline=False
     )
-    
-    view = SimplePaginator([embed1, embed2])
+    embed4.set_footer(text=f"Page 4/4 • {get_current_time_french()}")
+    embed4.description += "\n\n-# Effectué la commande `&perm` pour voir votre grade et les commandes au quels vous avez accès"
+
+    view = SimplePaginator([embed1, embed2, embed3, embed4])
     await ctx.send(embed=embed1, view=view)
 
 @bot.command()
 @has_required_grade()
 async def help_logs(ctx):
     """Affiche l'aide pour les commandes de logs"""
-    embed = create_black_embed(
+    embed = create_white_embed(
         "Logs\n\n"
-        "> Pour définir un salon logs vous devez mettre obligatoirement le type et le salon\n"
+        "Pour définir un salon logs vous devez mettre obligatoirement le type et le salon\n"
         "exemple : &setlogsbl #salon\n\n"
         "&setlogs (les différents logs disponibles) #salon\n"
         "&setlogsbl #salon\n"
@@ -373,6 +391,53 @@ async def help_logs(ctx):
         "&setlogsunwl #salon\n\n"
         "&logs"
     )
+    await ctx.send(embed=embed)
+
+# ============ COMMANDE PERM ============
+@bot.command()
+@has_required_grade()
+async def perm(ctx):
+    """Affiche les permissions par grade"""
+    description = "──────────────\n"
+    description += "👑 Créateur++\n"
+    description += "──────────────\n"
+    description += "• Toutes les commandes\n"
+    description += "• WL/UnWL\n"
+    description += "• Unblall\n"
+    description += "• Configuration logs\n"
+    description += "• Changer limites\n\n"
+    
+    description += "──────────────\n"
+    description += "⭐ Créateur\n"
+    description += "──────────────\n"
+    description += "• Blacklist/Unblacklist\n"
+    description += "• Bllist/Blinfo\n"
+    description += "• Grades (owner, sys, sys+, crea) avec WL\n"
+    description += "• Wllist\n"
+    description += "• Myrole/Grades\n\n"
+    
+    description += "──────────────\n"
+    description += "🛠️ Sys+\n"
+    description += "──────────────\n"
+    description += "• Blacklist/Unblacklist\n"
+    description += "• Bllist/Blinfo\n"
+    description += "• Myrole/Grades\n\n"
+    
+    description += "──────────────\n"
+    description += "🔧 Sys\n"
+    description += "──────────────\n"
+    description += "• Blacklist/Unblacklist\n"
+    description += "• Bllist/Blinfo\n"
+    description += "• Myrole/Grades\n\n"
+    
+    description += "──────────────\n"
+    description += "👑 Owner\n"
+    description += "──────────────\n"
+    description += "• Blacklist/Unblacklist\n"
+    description += "• Bllist/Blinfo\n"
+    description += "• Myrole/Grades"
+    
+    embed = create_white_embed(description)
     await ctx.send(embed=embed)
 
 # ============ COMMANDES GRADES ============
@@ -394,7 +459,7 @@ async def grades(ctx):
         lines.append(f"{emoji} {grade} • Permission {value}")
     
     lines.append(f"──────────────")
-    embed = create_white_embed("📊 HIÉRARCHIE DES GRADES\n\n" + "\n".join(lines))
+    embed = create_white_embed("HIÉRARCHIE DES GRADES\n\n" + "\n".join(lines))
     await ctx.send(embed=embed)
 
 @bot.command()
@@ -405,10 +470,10 @@ async def myrole(ctx):
     if grade:
         embed = create_white_embed(
             f"T'es gradé : {grade}\n\n"
-            f"Fais `&myrole` pour voir les commandes aux quel ta acces"
+            f"Fais `&perm` pour voir les commandes aux quels tu as accès"
         )
     else:
-        embed = create_black_embed("Tu n'as aucun grade de la hiérarchie.")
+        embed = create_red_embed("Tu n'as aucun grade de la hiérarchie.")
     await ctx.send(embed=embed)
 
 # ============ COMMANDES BLACKLIST ============
@@ -426,11 +491,11 @@ async def bl(ctx, member: Optional[discord.Member] = None, *, reason: str = None
     
     # Vérifications
     if not member:
-        embed = create_black_embed("Vous devez mentionner un utilisateur ou répondre à son message.")
+        embed = create_red_embed("**__Usage Incorrecte__**\nUsage : `&bl id/@ raison`")
         return await ctx.send(embed=embed)
     
     if not reason:
-        embed = create_black_embed("Vous devez préciser une raison.")
+        embed = create_red_embed("**__Usage Incorrecte__**\nUsage : `&bl id/@ raison`")
         return await ctx.send(embed=embed)
     
     # Vérification des grades
@@ -438,17 +503,17 @@ async def bl(ctx, member: Optional[discord.Member] = None, *, reason: str = None
     target_grade = get_user_grade(member)
     
     if not executor_grade:
-        embed = create_black_embed("Vous n'avez pas les permissions nécessaires.")
+        embed = create_red_embed("Vous n'avez pas les permissions nécessaires.")
         return await ctx.send(embed=embed)
     
     if target_grade == "Créateur++":
-        embed = create_black_embed("Impossible de blacklist un **Créateur++**.")
+        embed = create_red_embed("Impossible de blacklist un **Créateur++**.")
         return await ctx.send(embed=embed)
     
     # Vérifier la limite BL
     can_bl, error_msg = check_bl_limit(ctx.author.id, executor_grade)
     if not can_bl:
-        embed = create_black_embed(error_msg)
+        embed = create_red_embed(error_msg)
         return await ctx.send(embed=embed)
     
     if not target_grade:
@@ -458,7 +523,7 @@ async def bl(ctx, member: Optional[discord.Member] = None, *, reason: str = None
         target_value = GRADES[target_grade]
     
     if GRADES[executor_grade] <= target_value:
-        embed = create_black_embed("Eh Oh ? T'essaie de faire quoi ?")
+        embed = create_red_embed("Eh Oh ? T'essaie de faire quoi ?")
         return await ctx.send(embed=embed)
     
     # Ban automatique
@@ -477,7 +542,7 @@ async def bl(ctx, member: Optional[discord.Member] = None, *, reason: str = None
         "reason": reason,
         "by": ctx.author.id,
         "banned": ban_success,
-        "timestamp": get_current_time()
+        "timestamp": get_current_time_french()
     }
     save_json(BLACKLIST_FILE, bl_data)
     
@@ -496,7 +561,7 @@ async def bl(ctx, member: Optional[discord.Member] = None, *, reason: str = None
         pass
     
     # Réponse publique
-    embed = create_white_embed(f"{member.mention} a etait blacklister par {ctx.author.mention}\nRaison : `{reason}`")
+    embed = create_green_embed(f"{member.mention} a été blacklister par {ctx.author.mention}\nRaison : `{reason}`")
     await ctx.send(embed=embed)
     
     # Log
@@ -504,7 +569,7 @@ async def bl(ctx, member: Optional[discord.Member] = None, *, reason: str = None
         "Blacklist par": f"{ctx.author.mention} ({executor_grade})",
         "Utilisateur BL": member.mention,
         "Raison": reason
-    }, LOG_THUMBNAIL)
+    })
 
 @bot.command()
 @has_required_grade()
@@ -514,18 +579,18 @@ async def unbl(ctx, member: discord.Member):
     uid = str(member.id)
     
     if uid not in bl_data:
-        embed = create_black_embed("Cet utilisateur n'est pas blacklist.")
+        embed = create_red_embed("Usage : `&unbl id/@`")
         return await ctx.send(embed=embed)
     
     # Vérification des grades
     executor_grade = get_user_grade(ctx.author)
     if not executor_grade:
-        embed = create_black_embed("Vous n'avez pas les permissions nécessaires.")
+        embed = create_red_embed("Vous n'avez pas les permissions nécessaires.")
         return await ctx.send(embed=embed)
     
     stored_grade = bl_data[uid]["grade"]
     if stored_grade == "Créateur++" and executor_grade != "Créateur++":
-        embed = create_black_embed("Seul un **Créateur++** peut unbl un autre Créateur++.")
+        embed = create_red_embed(f"Vous n'avez pas les permissions nécessaires nécessaire car cette utilisateur a été blacklister par un {stored_grade}.")
         return await ctx.send(embed=embed)
     
     # Unban automatique
@@ -533,14 +598,14 @@ async def unbl(ctx, member: discord.Member):
         async for ban_entry in ctx.guild.bans():
             if ban_entry.user.id == member.id:
                 await ctx.guild.unban(ban_entry.user, reason=f"Unblacklist par {ctx.author}")
-                unban_msg = f"{member.mention} a été retiré de la blacklist et **UNBANNI**."
+                unban_msg = f"{member.mention} a bien été **retiré** de la blacklist."
                 break
         else:
-            unban_msg = f"{member.mention} a été retiré de la blacklist (n'était pas banni)."
+            unban_msg = f"{member.mention} a bien été **retiré** de la blacklist (n'était pas banni)."
     except discord.Forbidden:
-        unban_msg = f"{member.mention} a été retiré de la blacklist (pas les permissions de unban)."
+        unban_msg = f"{member.mention} a bien été **retiré** de la blacklist (pas les permissions de unban)."
     except:
-        unban_msg = f"{member.mention} a été retiré de la blacklist."
+        unban_msg = f"{member.mention} a bien été **retiré** de la blacklist."
     
     # Envoi DM à la personne unblacklistée
     try:
@@ -557,14 +622,14 @@ async def unbl(ctx, member: discord.Member):
     del bl_data[uid]
     save_json(BLACKLIST_FILE, bl_data)
     
-    embed = create_white_embed(unban_msg)
+    embed = create_green_embed(unban_msg)
     await ctx.send(embed=embed)
     
     # Log
     await send_log(ctx, "unbl", {
         "Unblacklist par": ctx.author.mention,
         "Utilisateur unBL": member.mention
-    }, LOG_THUMBNAIL)
+    })
 
 @bot.command()
 @has_specific_grade("Créateur++")
@@ -595,7 +660,7 @@ async def unblall(ctx):
     else:
         msg = f"{count} utilisateurs ont été unblacklist avec succès"
     
-    embed = create_white_embed(msg)
+    embed = create_green_embed(msg)
     await ctx.send(embed=embed)
     
     # Log
@@ -603,7 +668,7 @@ async def unblall(ctx):
         "Unblacklist par": ctx.author.mention,
         "Action": "Tout unblacklist",
         "Nombre": str(count)
-    }, LOG_THUMBNAIL)
+    })
 
 @bot.command()
 @has_required_grade()
@@ -612,7 +677,7 @@ async def bllist(ctx):
     bl_data = load_json(BLACKLIST_FILE)
     
     if not bl_data:
-        embed = create_black_embed("Aucun utilisateur blacklist")
+        embed = create_white_embed("Aucun utilisateur blacklist")
         return await ctx.send(embed=embed)
     
     # Crée les pages
@@ -635,8 +700,8 @@ async def bllist(ctx):
             description_lines.append(f"• Raison : {reason}")
             description_lines.append("")
         
-        embed = create_white_embed("📋 Liste des blacklist\n\n" + "\n".join(description_lines))
-        embed.set_footer(text=f"Page {len(pages)+1}/{(len(all_items)+items_per_page-1)//items_per_page} • {get_current_time()}")
+        embed = create_white_embed("Liste des blacklist\n\n" + "\n".join(description_lines))
+        embed.set_footer(text=f"Page {len(pages)+1}/{(len(all_items)+items_per_page-1)//items_per_page} • {get_current_time_french()}")
         pages.append(embed)
     
     # Si une seule page, envoie simple
@@ -656,14 +721,14 @@ async def blinfo(ctx, member: discord.Member):
     uid = str(member.id)
     
     if uid not in bl_data:
-        embed = create_black_embed("Cet utilisateur n'est pas blacklist.")
+        embed = create_red_embed("Cet utilisateur n'est pas blacklist.")
         return await ctx.send(embed=embed)
     
     data = bl_data[uid]
     grade = get_user_grade(member)
     
     embed = create_white_embed(
-        f"📄 BLACKLIST INFO\n\n"
+        f"BLACKLIST INFO\n\n"
         f"Blacklist : {member.mention}\n\n"
         f"Par : <@{data['by']}> ({data['grade']})\n\n"
         f"Raison du BL :\n{data['reason']}"
@@ -677,18 +742,18 @@ async def blinfo(ctx, member: discord.Member):
 async def wl(ctx, member: discord.Member, wl_type: str):
     """Ajouter un utilisateur à la whitelist (Créateur++ uniquement)"""
     wl_type = wl_type.lower()
-    valid_types = ["owner", "sys", "sys+", "crea"]
+    valid_types = ["owner", "sys", "sys+", "crea", "crea++"]
     
     if wl_type not in valid_types:
-        embed = create_black_embed(f"Type invalide. Utilise : {', '.join(valid_types)}")
+        embed = create_red_embed(f"Type invalide. Utilise : {', '.join(valid_types)}")
         return await ctx.send(embed=embed)
     
     if is_in_whitelist(str(member.id), wl_type):
-        embed = create_black_embed(f"{member.mention} est déjà dans la whitelist {wl_type}.")
+        embed = create_red_embed(f"{member.mention} est déjà dans la whitelist {wl_type}.")
         return await ctx.send(embed=embed)
     
     add_to_whitelist(str(member.id), wl_type)
-    embed = create_white_embed(f"{member.mention} ajouté à la whitelist {wl_type}.")
+    embed = create_green_embed(f"{member.mention} ajouté à la whitelist {wl_type}.")
     await ctx.send(embed=embed)
     
     # Log
@@ -696,7 +761,7 @@ async def wl(ctx, member: discord.Member, wl_type: str):
         "Ajouté par": ctx.author.mention,
         "À": member.mention,
         "Type": wl_type
-    }, LOG_THUMBNAIL)
+    })
 
 @bot.command()
 @has_specific_grade("Créateur++")
@@ -705,15 +770,15 @@ async def unwl(ctx, member: discord.Member):
     removed = remove_from_whitelist(str(member.id))
     
     if removed:
-        embed = create_white_embed(f"{member.mention} retiré de la whitelist.")
+        embed = create_green_embed(f"{member.mention} retiré de la whitelist.")
         
         # Log
         await send_log(ctx, "unwl", {
             "Retiré par": ctx.author.mention,
             "De": member.mention
-        }, LOG_THUMBNAIL)
+        })
     else:
-        embed = create_black_embed(f"{member.mention} n'est dans aucune whitelist.")
+        embed = create_red_embed(f"{member.mention} n'est dans aucune whitelist.")
     
     await ctx.send(embed=embed)
 
@@ -723,14 +788,14 @@ async def wllist(ctx):
     """Voir les whitelists"""
     data = load_json(WHITELIST_FILE)
     
-    description_lines = ["📋 Whitelists\n"]
+    description_lines = ["Whitelists\n"]
     grade_order = ["crea++", "crea", "sys+", "sys", "owner"]
     grade_names = {
-        "crea++": "👑 Créateur++",
-        "crea": "⭐ Créateur",
-        "sys+": "🛠️ Sys+",
-        "sys": "🔧 Sys",
-        "owner": "👑 Owner"
+        "crea++": "Créateur++",
+        "crea": "Créateur",
+        "sys+": "Sys+",
+        "sys": "Sys",
+        "owner": "Owner"
     }
     
     for grade_type in grade_order:
@@ -767,7 +832,7 @@ def set_log_channel(guild_id: str, log_type: str, channel_id: int):
 async def setlogs(ctx, channel: discord.TextChannel):
     """Configurer le salon de logs général (Créateur++ uniquement)"""
     set_log_channel(ctx.guild.id, "general", channel.id)
-    embed = create_white_embed(f"Salon de logs configuré : {channel.mention}")
+    embed = create_green_embed(f"Salon de logs configuré : {channel.mention}")
     await ctx.send(embed=embed)
 
 @bot.command()
@@ -775,7 +840,7 @@ async def setlogs(ctx, channel: discord.TextChannel):
 async def setlogsbl(ctx, channel: discord.TextChannel):
     """Configurer le salon de logs BL (Créateur++ uniquement)"""
     set_log_channel(ctx.guild.id, "bl", channel.id)
-    embed = create_white_embed(f"Salon de logs BL configuré : {channel.mention}")
+    embed = create_green_embed(f"Salon de logs BL configuré : {channel.mention}")
     await ctx.send(embed=embed)
 
 @bot.command()
@@ -783,7 +848,7 @@ async def setlogsbl(ctx, channel: discord.TextChannel):
 async def setlogsunbl(ctx, channel: discord.TextChannel):
     """Configurer le salon de logs UNBL (Créateur++ uniquement)"""
     set_log_channel(ctx.guild.id, "unbl", channel.id)
-    embed = create_white_embed(f"Salon de logs UNBL configuré : {channel.mention}")
+    embed = create_green_embed(f"Salon de logs UNBL configuré : {channel.mention}")
     await ctx.send(embed=embed)
 
 @bot.command()
@@ -791,7 +856,7 @@ async def setlogsunbl(ctx, channel: discord.TextChannel):
 async def setlogsrank(ctx, channel: discord.TextChannel):
     """Configurer le salon de logs RANK (Créateur++ uniquement)"""
     set_log_channel(ctx.guild.id, "rank", channel.id)
-    embed = create_white_embed(f"Salon de logs RANK configuré : {channel.mention}")
+    embed = create_green_embed(f"Salon de logs RANK configuré : {channel.mention}")
     await ctx.send(embed=embed)
 
 @bot.command()
@@ -799,7 +864,7 @@ async def setlogsrank(ctx, channel: discord.TextChannel):
 async def setlogswl(ctx, channel: discord.TextChannel):
     """Configurer le salon de logs WL (Créateur++ uniquement)"""
     set_log_channel(ctx.guild.id, "wl", channel.id)
-    embed = create_white_embed(f"Salon de logs WL configuré : {channel.mention}")
+    embed = create_green_embed(f"Salon de logs WL configuré : {channel.mention}")
     await ctx.send(embed=embed)
 
 @bot.command()
@@ -807,7 +872,7 @@ async def setlogswl(ctx, channel: discord.TextChannel):
 async def setlogsunwl(ctx, channel: discord.TextChannel):
     """Configurer le salon de logs UNWL (Créateur++ uniquement)"""
     set_log_channel(ctx.guild.id, "unwl", channel.id)
-    embed = create_white_embed(f"Salon de logs UNWL configuré : {channel.mention}")
+    embed = create_green_embed(f"Salon de logs UNWL configuré : {channel.mention}")
     await ctx.send(embed=embed)
 
 @bot.command()
@@ -818,7 +883,7 @@ async def logs(ctx):
     guild_id = str(ctx.guild.id)
     
     if guild_id not in data:
-        embed = create_black_embed("Aucun salon de logs configuré.")
+        embed = create_white_embed("Aucun salon de logs configuré.")
         return await ctx.send(embed=embed)
     
     guild_data = data[guild_id]
@@ -840,7 +905,7 @@ async def logs(ctx):
         else:
             lines.append(f"{name} : Non configuré")
     
-    embed = create_black_embed("\n".join(lines))
+    embed = create_white_embed("\n".join(lines))
     await ctx.send(embed=embed)
 
 # ============ COMMANDES ATTRIBUTION DE GRADES ============
@@ -852,48 +917,48 @@ async def rank(ctx, member: discord.Member, grade: str):
     valid_grades = ["owner", "sys", "sys+", "crea", "crea++"]
     
     if grade not in valid_grades:
-        embed = create_black_embed("Grade invalide. Utilise : owner, sys, sys+")
+        embed = create_red_embed("Grade invalide. Utilise : owner, sys, sys+, crea, crea++")
         return await ctx.send(embed=embed)
     
     # Vérification des permissions
     executor_grade = get_user_grade(ctx.author)
     
     if not executor_grade:
-        embed = create_black_embed("Vous n'avez pas les permissions nécessaires pour attribuer un grade.")
+        embed = create_red_embed("Vous n'avez pas les permissions nécessaires pour attribuer un grade.")
         return await ctx.send(embed=embed)
     
     # Créateur++ peut tout donner sans whitelist
     if executor_grade == "Créateur++":
         pass  # Pas de vérification de whitelist
-    # Créateur peut donner owner/sys/sys+ mais doit être dans la whitelist
+    # Créateur peut donner owner/sys/sys+/crea mais doit être dans la whitelist
     elif executor_grade == "Créateur":
-        if grade not in ["owner", "sys", "sys+"]:
-            embed = create_black_embed("Vous n'avez pas les permissions nécessaires pour attribuer ce grade.")
+        if grade not in ["owner", "sys", "sys+", "crea"]:
+            embed = create_red_embed("Vous n'avez pas les permissions nécessaires pour attribuer ce grade.")
             return await ctx.send(embed=embed)
         
         if not is_in_whitelist(str(ctx.author.id), grade):
-            embed = create_black_embed(f"Vous n'êtes pas dans la whitelist {grade}.")
+            embed = create_red_embed(f"Vous n'êtes pas dans la whitelist {grade}.")
             return await ctx.send(embed=embed)
     # Autres grades ne peuvent pas donner de grades
     else:
-        embed = create_black_embed("Vous n'avez pas les permissions nécessaires pour attribuer un grade.")
+        embed = create_red_embed("Vous n'avez pas les permissions nécessaires pour attribuer un grade.")
         return await ctx.send(embed=embed)
     
     # Vérifier la limite de grade
     can_give, error_msg = check_grade_limit(ctx.guild.id, grade)
     if not can_give:
-        embed = create_black_embed(error_msg)
+        embed = create_red_embed(error_msg)
         return await ctx.send(embed=embed)
     
     # Récupérer le rôle
     role_id = GRADE_TO_ROLE_ID.get(grade)
     if not role_id:
-        embed = create_black_embed(f"Rôle {grade} introuvable.")
+        embed = create_red_embed(f"Rôle {grade} introuvable.")
         return await ctx.send(embed=embed)
     
     role = ctx.guild.get_role(role_id)
     if not role:
-        embed = create_black_embed(f"Rôle {grade} introuvable.")
+        embed = create_red_embed(f"Rôle {grade} introuvable.")
         return await ctx.send(embed=embed)
     
     # Donner le rôle
@@ -916,7 +981,7 @@ async def rank(ctx, member: discord.Member, grade: str):
         }
         
         grade_display = grade_name_map.get(grade, grade)
-        embed = create_white_embed(f"{member.mention} a bien recu le grade {grade_display}")
+        embed = create_green_embed(f"{member.mention} a bien reçu le grade {grade_display}")
         await ctx.send(embed=embed)
         
         # Log
@@ -927,10 +992,10 @@ async def rank(ctx, member: discord.Member, grade: str):
         })
         
     except discord.Forbidden:
-        embed = create_black_embed("Impossible d'ajouter le rôle. Permissions manquantes.")
+        embed = create_red_embed("Impossible d'ajouter le rôle. Permissions manquantes.")
         await ctx.send(embed=embed)
     except discord.HTTPException:
-        embed = create_black_embed("Erreur technique. Impossible d'ajouter le rôle.")
+        embed = create_red_embed("Erreur technique. Impossible d'ajouter le rôle.")
         await ctx.send(embed=embed)
 
 # ============ COMMANDE CHANGELIMIT ============
@@ -939,14 +1004,14 @@ async def rank(ctx, member: discord.Member, grade: str):
 async def changelimit(ctx, grade: str, limit: int):
     """Changer la limite de membres pour un grade (Créateur++ uniquement)"""
     grade = grade.lower()
-    valid_grades = ["owner", "sys", "sys+", "crea"]
+    valid_grades = ["owner", "sys", "sys+", "crea", "crea++"]
     
     if grade not in valid_grades:
-        embed = create_black_embed(f"Grade invalide. Grades : {', '.join(valid_grades)}")
+        embed = create_red_embed(f"Grade invalide. Grades : {', '.join(valid_grades)}")
         return await ctx.send(embed=embed)
     
     if limit < 1 or limit > 100:
-        embed = create_black_embed("Nombre invalide. Utilise un nombre entre 1 et 100.")
+        embed = create_red_embed("Nombre invalide. Utilise un nombre entre 1 et 100.")
         return await ctx.send(embed=embed)
     
     data = load_json(GRADE_LIMITS_FILE)
@@ -962,11 +1027,12 @@ async def changelimit(ctx, grade: str, limit: int):
         "owner": "Owner",
         "sys": "Sys",
         "sys+": "Sys+",
-        "crea": "Créateur"
+        "crea": "Créateur",
+        "crea++": "Créateur++"
     }
     
     grade_display = grade_name_map.get(grade, grade)
-    embed = create_white_embed(f"Limite {grade_display} définie à {limit} membres.")
+    embed = create_green_embed(f"Limite {grade_display} définie à {limit} membres.")
     await ctx.send(embed=embed)
 
 # ============ COMMANDE PING ============
@@ -974,7 +1040,7 @@ async def changelimit(ctx, grade: str, limit: int):
 async def ping(ctx):
     """Vérifie la latence du bot"""
     latency = round(bot.latency * 1000)
-    embed = create_white_embed(f"🏓 Pong! Latence : **{latency}ms**")
+    embed = create_white_embed(f"Pong! Latence : **{latency}ms**")
     await ctx.send(embed=embed)
 
 # ============ LANCEMENT ============
