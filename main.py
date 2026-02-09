@@ -4,14 +4,12 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-# ============ IMPORT DISCORD ============
 import discord
 from discord.ext import commands
 
-# ============ CONFIGURATION ============
 TOKEN = os.getenv("TOKEN") or os.getenv("DISCORD_TOKEN")
 if not TOKEN:
-    print("❌ ERREUR : Token Discord non défini!")
+    print("ERREUR : Token Discord non défini!")
     print("Configure la variable d'environnement 'TOKEN' ou 'DISCORD_TOKEN'")
     sys.exit(1)
 
@@ -20,23 +18,18 @@ THUMBNAIL_URL = "https://cdn.discordapp.com/attachments/1467151867191496808/1467
 SUPPORT_ID = 1399234120214909010
 LOG_THUMBNAIL = THUMBNAIL_URL
 
-# ============ ADMIN USER ID ============
 ADMIN_USER_ID = 1399234120214909010
 
-# IDs des rôles
 CREATOR_PP_ROLE_ID = 1466459905736183879
 CREATOR_ROLE_ID = 1466514624718307562
 SYS_PLUS_ROLE_ID = 1466515541828309195
 SYS_ROLE_ID = 1466462217808642263
 OWNER_ROLE_ID = 1466773492388073482
 
-# ============ BASE DE DONNÉES SQLITE ============
 def init_database():
-    """Initialise la base de données SQLite"""
     conn = sqlite3.connect('akusa_bot.db', check_same_thread=False)
     cursor = conn.cursor()
     
-    # Table blacklist
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS blacklist (
             user_id INTEGER PRIMARY KEY,
@@ -51,7 +44,6 @@ def init_database():
         )
     ''')
     
-    # Table whitelist
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS whitelist (
             user_id INTEGER PRIMARY KEY,
@@ -62,7 +54,6 @@ def init_database():
         )
     ''')
     
-    # Table logs configuration
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS logs_config (
             guild_id INTEGER,
@@ -72,7 +63,6 @@ def init_database():
         )
     ''')
     
-    # Table blacklist limits
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS bl_limits (
             user_id INTEGER PRIMARY KEY,
@@ -81,7 +71,6 @@ def init_database():
         )
     ''')
     
-    # Table grade limits
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS grade_limits (
             guild_id INTEGER,
@@ -94,11 +83,9 @@ def init_database():
     conn.commit()
     return conn, cursor
 
-# Initialiser la base de données
 db_conn, db_cursor = init_database()
-print("✅ Base de données SQLite initialisée")
+print("Base de données SQLite initialisée")
 
-# ============ FONCTIONS DATABASE ============
 def add_to_blacklist(user_id, user_name, grade, reason, added_by, added_by_name, banned, on_server, timestamp):
     db_cursor.execute('''
         INSERT OR REPLACE INTO blacklist 
@@ -194,7 +181,6 @@ def get_grade_limit(guild_id, grade_type):
     result = db_cursor.fetchone()
     return result[0] if result else None
 
-# ============ PAGINATION SIMPLE ============
 class SimplePaginator(discord.ui.View):
     def __init__(self, embeds, timeout=3600):
         super().__init__(timeout=timeout)
@@ -218,7 +204,6 @@ class SimplePaginator(discord.ui.View):
         self.update_buttons()
         await interaction.response.edit_message(embed=self.embeds[self.current_page], view=self)
 
-# ============ VÉRIFICATIONS DE PERMISSIONS ============
 def has_required_grade():
     async def predicate(ctx):
         if ctx.author.id == ADMIN_USER_ID:
@@ -263,11 +248,9 @@ def has_specific_grade(required_grade: str):
         return False
     return commands.check(predicate)
 
-# ============ INITIALISATION ============
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix=PREFIX, intents=intents, help_command=None)
 
-# ============ HIÉRARCHIE ============
 GRADES = {
     "Créateur++": 5,
     "Créateur": 4,
@@ -292,7 +275,6 @@ GRADE_TO_ROLE_ID = {
     "crea++": CREATOR_PP_ROLE_ID
 }
 
-# ============ FONCTIONS UTILITAIRES ============
 def get_user_grade(member: discord.Member) -> Optional[str]:
     if member.id == ADMIN_USER_ID:
         return "Créateur++"
@@ -374,7 +356,6 @@ def get_current_time_french():
     now = datetime.now(tz)
     return now.strftime("%d/%m/%Y - %H:%M:%S")
 
-# ============ LIMITES BLACKLIST ============
 BL_LIMITS = {
     "Owner": 3,
     "Sys": 6,
@@ -383,7 +364,7 @@ BL_LIMITS = {
     "Créateur++": 9999
 }
 
-BL_COOLDOWN = 7200  # 2 heures
+BL_COOLDOWN = 7200
 
 def check_bl_limit(user_id: str, grade: str) -> tuple[bool, str]:
     if int(user_id) == ADMIN_USER_ID:
@@ -425,7 +406,6 @@ def increment_bl_count(user_id: str):
         count, last_reset = result
         update_bl_limit(str(user_id), count + 1, last_reset)
 
-# ============ LOGS ============
 async def send_log(ctx, log_type: str, fields: dict):
     channel_id = get_log_channel(ctx.guild.id, log_type)
     
@@ -458,13 +438,11 @@ async def send_log(ctx, log_type: str, fields: dict):
     except:
         pass
 
-# ============ ÉVÉNEMENTS ============
 @bot.event
 async def on_ready():
-    print(f"✅ Bot connecté : {bot.user}")
+    print(f"Bot connecté : {bot.user}")
     await bot.change_presence(activity=discord.Game(name=f"{PREFIX}help"))
 
-# ============ COMMANDES HELP ============
 @bot.command()
 @has_required_grade()
 async def help(ctx):
@@ -557,78 +535,51 @@ async def help_logs(ctx):
 @has_required_grade()
 async def perm(ctx):
     description = "──────────────\n"
-    
-    if ctx.author.id == ADMIN_USER_ID:
-        description += "🔰 ADMIN SPÉCIAL\n"
-        description += "──────────────\n"
-        description += "• Accès complet à toutes les commandes\n"
-        description += "• Pas de limites de blacklist\n"
-        description += "• Pas besoin de whitelist\n"
-        description += "• Toutes les permissions\n\n"
+    description += "Créateur++\n"
+    description += "──────────────\n"
+    description += "Toutes les commandes\n\n"
     
     description += "──────────────\n"
-    description += "👑 Créateur++\n"
+    description += "Créateur\n"
     description += "──────────────\n"
-    description += "• Toutes les commandes\n"
-    description += "• WL/UnWL/ClearWL\n"
-    description += "• Unblall\n"
-    description += "• Configuration logs\n"
-    description += "• Changer limites BL\n\n"
+    description += "Blacklist/Unblacklist\n"
+    description += "Bllist/Blinfo\n"
+    description += "Grades (owner, sys, sys+, crea) avec WL\n"
+    description += "Wllist\n"
+    description += "Myrole/Grades\n\n"
     
     description += "──────────────\n"
-    description += "⭐ Créateur\n"
+    description += "Sys+\n"
     description += "──────────────\n"
-    description += "• Blacklist/Unblacklist\n"
-    description += "• Bllist/Blinfo\n"
-    description += "• Grades (owner, sys, sys+, crea) avec WL\n"
-    description += "• Wllist\n"
-    description += "• Myrole/Grades\n\n"
+    description += "Blacklist/Unblacklist\n"
+    description += "Bllist/Blinfo\n"
+    description += "Myrole/Grades\n\n"
     
     description += "──────────────\n"
-    description += "🛠️ Sys+\n"
+    description += "Sys\n"
     description += "──────────────\n"
-    description += "• Blacklist/Unblacklist\n"
-    description += "• Bllist/Blinfo\n"
-    description += "• Myrole/Grades\n\n"
+    description += "Blacklist/Unblacklist\n"
+    description += "Bllist/Blinfo\n"
+    description += "Myrole/Grades\n\n"
     
     description += "──────────────\n"
-    description += "🔧 Sys\n"
+    description += "Owner\n"
     description += "──────────────\n"
-    description += "• Blacklist/Unblacklist\n"
-    description += "• Bllist/Blinfo\n"
-    description += "• Myrole/Grades\n\n"
-    
-    description += "──────────────\n"
-    description += "👑 Owner\n"
-    description += "──────────────\n"
-    description += "• Blacklist/Unblacklist\n"
-    description += "• Bllist/Blinfo\n"
-    description += "• Myrole/Grades"
+    description += "Blacklist/Unblacklist\n"
+    description += "Bllist/Blinfo\n"
+    description += "Myrole/Grades"
     
     embed = create_white_embed(description)
     await ctx.send(embed=embed)
 
-# ============ COMMANDES GRADES ============
 @bot.command()
 @has_required_grade()
 async def grades(ctx):
     lines = []
     
-    if ctx.author.id == ADMIN_USER_ID:
-        lines.append(f"──────────────")
-        lines.append(f"🔰 ADMIN SPÉCIAL • Permission MAX")
-    
     for grade, value in sorted(GRADES.items(), key=lambda x: x[1], reverse=True):
-        emoji = {
-            "Créateur++": "👑",
-            "Créateur": "⭐",
-            "Sys+": "🛠️",
-            "Sys": "🔧",
-            "Owner": "👑"
-        }.get(grade, "•")
-        
         lines.append(f"──────────────")
-        lines.append(f"{emoji} {grade} • Permission {value}")
+        lines.append(f"{grade} • Permission {value}")
     
     lines.append(f"──────────────")
     embed = create_white_embed("HIÉRARCHIE DES GRADES\n\n" + "\n".join(lines))
@@ -639,7 +590,7 @@ async def grades(ctx):
 async def myrole(ctx):
     if ctx.author.id == ADMIN_USER_ID:
         embed = create_white_embed(
-            f"🔰 Tu es l'ADMIN SPÉCIAL\n\n"
+            f"Tu es un Créateur++\n\n"
             f"Tu as accès à toutes les commandes sans restrictions"
         )
     else:
@@ -653,7 +604,176 @@ async def myrole(ctx):
             embed = create_red_embed("Tu n'as aucun grade de la hiérarchie.")
     await ctx.send(embed=embed)
 
-# ============ COMMANDES BLACKLIST ============
+@bot.command()
+@has_required_grade()
+async def owner(ctx, member: Optional[discord.Member] = None):
+    if not member:
+        role = ctx.guild.get_role(OWNER_ROLE_ID)
+        if not role:
+            embed = create_red_embed("Le rôle Owner n'existe pas.")
+            return await ctx.send(embed=embed)
+        
+        members_with_role = [member.mention for member in role.members if not member.bot]
+        
+        if not members_with_role:
+            embed = create_white_embed("Aucun utilisateur n'a le grade Owner.")
+            return await ctx.send(embed=embed)
+        
+        embed = create_white_embed(
+            f"**Liste des Owners** ({len(members_with_role)}):\n\n" +
+            "\n".join(members_with_role)
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    role = ctx.guild.get_role(OWNER_ROLE_ID)
+    if not role:
+        embed = create_red_embed("Le rôle Owner n'existe pas.")
+        return await ctx.send(embed=embed)
+    
+    if role in member.roles:
+        embed = create_white_embed(f"{member.mention} a le grade Owner")
+    else:
+        embed = create_white_embed(f"{member.mention} n'a pas le grade Owner")
+    
+    await ctx.send(embed=embed)
+
+@bot.command()
+@has_required_grade()
+async def sys(ctx, member: Optional[discord.Member] = None):
+    if not member:
+        role = ctx.guild.get_role(SYS_ROLE_ID)
+        if not role:
+            embed = create_red_embed("Le rôle Sys n'existe pas.")
+            return await ctx.send(embed=embed)
+        
+        members_with_role = [member.mention for member in role.members if not member.bot]
+        
+        if not members_with_role:
+            embed = create_white_embed("Aucun utilisateur n'a le grade Sys.")
+            return await ctx.send(embed=embed)
+        
+        embed = create_white_embed(
+            f"**Liste des Sys** ({len(members_with_role)}):\n\n" +
+            "\n".join(members_with_role)
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    role = ctx.guild.get_role(SYS_ROLE_ID)
+    if not role:
+        embed = create_red_embed("Le rôle Sys n'existe pas.")
+        return await ctx.send(embed=embed)
+    
+    if role in member.roles:
+        embed = create_white_embed(f"{member.mention} a le grade Sys")
+    else:
+        embed = create_white_embed(f"{member.mention} n'a pas le grade Sys")
+    
+    await ctx.send(embed=embed)
+
+@bot.command()
+@has_required_grade()
+async def sysplus(ctx, member: Optional[discord.Member] = None):
+    if not member:
+        role = ctx.guild.get_role(SYS_PLUS_ROLE_ID)
+        if not role:
+            embed = create_red_embed("Le rôle Sys+ n'existe pas.")
+            return await ctx.send(embed=embed)
+        
+        members_with_role = [member.mention for member in role.members if not member.bot]
+        
+        if not members_with_role:
+            embed = create_white_embed("Aucun utilisateur n'a le grade Sys+.")
+            return await ctx.send(embed=embed)
+        
+        embed = create_white_embed(
+            f"**Liste des Sys+** ({len(members_with_role)}):\n\n" +
+            "\n".join(members_with_role)
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    role = ctx.guild.get_role(SYS_PLUS_ROLE_ID)
+    if not role:
+        embed = create_red_embed("Le rôle Sys+ n'existe pas.")
+        return await ctx.send(embed=embed)
+    
+    if role in member.roles:
+        embed = create_white_embed(f"{member.mention} a le grade Sys+")
+    else:
+        embed = create_white_embed(f"{member.mention} n'a pas le grade Sys+")
+    
+    await ctx.send(embed=embed)
+
+@bot.command()
+@has_required_grade()
+async def crea(ctx, member: Optional[discord.Member] = None):
+    if not member:
+        role = ctx.guild.get_role(CREATOR_ROLE_ID)
+        if not role:
+            embed = create_red_embed("Le rôle Créateur n'existe pas.")
+            return await ctx.send(embed=embed)
+        
+        members_with_role = [member.mention for member in role.members if not member.bot]
+        
+        if not members_with_role:
+            embed = create_white_embed("Aucun utilisateur n'a le grade Créateur.")
+            return await ctx.send(embed=embed)
+        
+        embed = create_white_embed(
+            f"**Liste des Créateurs** ({len(members_with_role)}):\n\n" +
+            "\n".join(members_with_role)
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    role = ctx.guild.get_role(CREATOR_ROLE_ID)
+    if not role:
+        embed = create_red_embed("Le rôle Créateur n'existe pas.")
+        return await ctx.send(embed=embed)
+    
+    if role in member.roles:
+        embed = create_white_embed(f"{member.mention} a le grade Créateur")
+    else:
+        embed = create_white_embed(f"{member.mention} n'a pas le grade Créateur")
+    
+    await ctx.send(embed=embed)
+
+@bot.command()
+@has_required_grade()
+async def creapp(ctx, member: Optional[discord.Member] = None):
+    if not member:
+        role = ctx.guild.get_role(CREATOR_PP_ROLE_ID)
+        if not role:
+            embed = create_red_embed("Le rôle Créateur++ n'existe pas.")
+            return await ctx.send(embed=embed)
+        
+        members_with_role = [member.mention for member in role.members if not member.bot]
+        
+        if not members_with_role:
+            embed = create_white_embed("Aucun utilisateur n'a le grade Créateur++.")
+            return await ctx.send(embed=embed)
+        
+        embed = create_white_embed(
+            f"**Liste des Créateurs++** ({len(members_with_role)}):\n\n" +
+            "\n".join(members_with_role)
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    role = ctx.guild.get_role(CREATOR_PP_ROLE_ID)
+    if not role:
+        embed = create_red_embed("Le rôle Créateur++ n'existe pas.")
+        return await ctx.send(embed=embed)
+    
+    if role in member.roles:
+        embed = create_white_embed(f"{member.mention} a le grade Créateur++")
+    else:
+        embed = create_white_embed(f"{member.mention} n'a pas le grade Créateur++")
+    
+    await ctx.send(embed=embed)
+
 @bot.command()
 @has_required_grade()
 async def bl(ctx, identifier: str = None, *, reason: str = None):
@@ -697,7 +817,7 @@ async def bl(ctx, identifier: str = None, *, reason: str = None):
         target_grade = get_user_grade(target_member)
         
         if target_grade == "Créateur++":
-            embed = create_red_embed("Impossible de blacklist un **Créateur++**.")
+            embed = create_red_embed("Impossible de blacklist un Créateur++.")
             return await ctx.send(embed=embed)
         
         if not target_grade:
@@ -764,7 +884,7 @@ async def bl(ctx, identifier: str = None, *, reason: str = None):
     
     await ctx.send(embed=embed)
     
-    executor_display = "ADMIN SPÉCIAL" if ctx.author.id == ADMIN_USER_ID else f"{executor_grade}"
+    executor_display = "Créateur++" if ctx.author.id == ADMIN_USER_ID else f"{executor_grade}"
     
     if is_on_server:
         await send_log(ctx, "bl", {
@@ -1000,7 +1120,6 @@ async def blinfo(ctx, identifier: str):
         embed.set_thumbnail(url=member.avatar.url)
     await ctx.send(embed=embed)
 
-# ============ COMMANDE GRADE ============
 @bot.command()
 @has_required_grade()
 async def grade(ctx, identifier: str = None):
@@ -1042,27 +1161,18 @@ async def limits(ctx):
     lines = []
     
     for grade, limit in sorted(BL_LIMITS.items(), key=lambda x: GRADES.get(x[0], 0), reverse=True):
-        emoji = {
-            "Créateur++": "👑",
-            "Créateur": "⭐",
-            "Sys+": "🛠️",
-            "Sys": "🔧",
-            "Owner": "👑"
-        }.get(grade, "•")
-        
         if limit == 9999:
             limit_display = "Illimité"
         else:
             limit_display = str(limit)
         
-        lines.append(f"{emoji} **{grade}** : {limit_display} BL/heure")
+        lines.append(f"**{grade}** : {limit_display} BL/heure")
     
     lines.append(f"\n> La limite de bl par heure ce reset toute les **2 heures**")
     
     embed = create_white_embed("\n".join(lines))
     await ctx.send(embed=embed)
 
-# ============ COMMANDES WHITELIST ============
 @bot.command()
 @has_specific_grade("Créateur++")
 async def wl(ctx, identifier: str = None):
@@ -1217,7 +1327,6 @@ async def wllist(ctx):
     embed = create_white_embed("\n".join(description_lines))
     await ctx.send(embed=embed)
 
-# ============ COMMANDES LOGS CONFIGURATION ============
 @bot.command()
 @has_specific_grade("Créateur++")
 async def setlogs(ctx, channel: discord.TextChannel):
@@ -1318,7 +1427,6 @@ async def logs(ctx):
     embed = create_white_embed("\n".join(lines))
     await ctx.send(embed=embed)
 
-# ============ COMMANDES ATTRIBUTION DE GRADES ============
 def get_grade_name_from_key(grade_key: str) -> str:
     grade_map = {
         "owner": "Owner",
@@ -1413,7 +1521,7 @@ async def rank(ctx, member: discord.Member = None, grade: str = None):
         embed = create_green_embed(f"{member.mention} a bien reçu le grade {grade_display}")
         await ctx.send(embed=embed)
         
-        executor_display = "ADMIN SPÉCIAL" if ctx.author.id == ADMIN_USER_ID else f"{executor_grade}"
+        executor_display = "Créateur++" if ctx.author.id == ADMIN_USER_ID else f"{executor_grade}"
         await send_log(ctx, "rank", {
             "Donné par": f"{ctx.author.mention} ({executor_display})",
             "À": member.mention,
@@ -1427,7 +1535,6 @@ async def rank(ctx, member: discord.Member = None, grade: str = None):
         embed = create_red_embed("Erreur technique. Impossible d'ajouter le rôle.")
         await ctx.send(embed=embed)
 
-# ============ COMMANDE CHANGELIMIT ============
 @bot.command()
 @has_specific_grade("Créateur++")
 async def changelimit(ctx, grade: str, limit: int):
@@ -1453,14 +1560,12 @@ async def changelimit(ctx, grade: str, limit: int):
     embed = create_green_embed(f"Limite de BL par heure pour **{grade_display}** définie à **{limit}**.")
     await ctx.send(embed=embed)
 
-# ============ COMMANDE PING ============
 @bot.command()
 async def ping(ctx):
     latency = round(bot.latency * 1000)
     embed = create_white_embed(f"Pong! Latence : **{latency}ms**")
     await ctx.send(embed=embed)
 
-# ============ LANCEMENT ============
 if __name__ == "__main__":
-    print("🚀 Démarrage du bot Akusa...")
+    print("Démarrage du bot Akusa...")
     bot.run(TOKEN)
