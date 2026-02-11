@@ -1527,4 +1527,4 @@ async def block(ctx, action: str = None, *, word: str = None):
 
 if __name__ == "__main__":
     print("Démarrage du bot Akusa...")
-    bot.run(TOKEN)
+    bot.run(TOKEN)  # ✅ PAS DE PARENTHÈSE APRÈS
