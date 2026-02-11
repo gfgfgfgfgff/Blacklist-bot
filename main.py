@@ -534,7 +534,7 @@ async def perm(ctx):
     description += "──────────────\n"
     description += "Sys+\n"
     description += "──────────────\n"
-    description += "Blacklist/Unblacklist\n"
+    description += "Blacklist/Unblacklist (raison non obligatoire)\n"
     description += "Bllist/Blinfo\n"
     description += "Myrole/Grades\n\n"
     
@@ -684,6 +684,11 @@ async def sys(ctx, member: str = None):
 async def sysplus(ctx, member: str = None):
     await handle_grade_command(ctx, member, "Sys+", "Sys+")
 
+@bot.command(name="sys+")
+@has_required_grade("Créateur")
+async def sys_plus(ctx, member: str = None):
+    await handle_grade_command(ctx, member, "Sys+", "Sys+")
+
 @bot.command()
 @has_required_grade("Créateur++")
 async def crea(ctx, member: str = None):
@@ -692,6 +697,11 @@ async def crea(ctx, member: str = None):
 @bot.command()
 @has_required_grade("Créateur++")
 async def creapp(ctx, member: str = None):
+    await handle_grade_command(ctx, member, "Créateur++", "Créateur++")
+
+@bot.command(name="crea++")
+@has_required_grade("Créateur++")
+async def crea_pp(ctx, member: str = None):
     await handle_grade_command(ctx, member, "Créateur++", "Créateur++")
 
 @bot.command()
@@ -760,10 +770,6 @@ async def bl(ctx, identifier: str = None, *, reason: str = None):
         embed = create_white_embed("**Usage Incorrecte**\nUsage : `&bl id/@ raison`")
         return await ctx.send(embed=embed)
     
-    if not reason:
-        embed = create_white_embed("**Usage Incorrecte**\nUsage : `&bl id/@ raison`\n\nRaison obligatoire pour blacklister un utilisateur.")
-        return await ctx.send(embed=embed)
-    
     result = await get_user_by_id_or_mention(ctx, identifier)
     
     if not result:
@@ -791,6 +797,15 @@ async def bl(ctx, identifier: str = None, *, reason: str = None):
         if not executor_grade:
             embed = create_white_embed("Tu na pas la permission d'utiliser cette commande")
             return await ctx.send(embed=embed)
+    
+    # Vérification raison obligatoire uniquement pour Owner et Sys
+    if not reason and executor_grade in ["Owner", "Sys"] and not is_in_whitelist(str(ctx.author.id)):
+        embed = create_white_embed("**Usage Incorrecte**\nUsage : `&bl id/@ raison`\n\nRaison obligatoire pour blacklister un utilisateur.")
+        return await ctx.send(embed=embed)
+    
+    # Si pas de raison pour les grades supérieurs, mettre ///// par défaut
+    if not reason:
+        reason = "/////"
     
     if is_on_server and isinstance(target_member, discord.Member):
         target_grade = get_user_grade(target_member.id, ctx.guild.id)
@@ -852,7 +867,11 @@ async def bl(ctx, identifier: str = None, *, reason: str = None):
     except:
         pass
     
-    embed = create_white_embed(f"{target_member.mention} à bien etait blacklister\n`{reason}`")
+    if reason == "/////":
+        embed = create_white_embed(f"{target_member.mention} à bien etait blacklister")
+    else:
+        embed = create_white_embed(f"{target_member.mention} à bien etait blacklister\n`{reason}`")
+    
     await ctx.send(embed=embed)
     
     executor_display = "Créateur++" if ctx.author.id == ADMIN_USER_ID else f"{executor_grade}"
@@ -1063,26 +1082,27 @@ async def blinfo(ctx, identifier: str):
     if bl_by_grade in ["Créateur", "Créateur++"]:
         hide_identity = True
     
-    embed_lines = ["BLACKLIST INFO\n"]
-    embed_lines.append("")
+    embed_lines = []
     
-    embed_lines.append(f"blacklist : {member.mention}")
+    embed_lines.append(f"Blacklist : {member.mention}")
     embed_lines.append(f"`{user_id}`")
-    embed_lines.append(f"`{reason}`")
     embed_lines.append("")
     
     if hide_identity:
-        embed_lines.append(f"Blacklist par : ❌❌❌")
+        embed_lines.append(f"Blacklister par : ❌❌❌")
     else:
         if added_by:
-            embed_lines.append(f"Blacklist par : <@{added_by}>")
+            embed_lines.append(f"Blacklister par : <@{added_by}>")
+            embed_lines.append(f"`{added_by}`")
         else:
-            embed_lines.append(f"Blacklist par : Inconnu")
+            embed_lines.append(f"Blacklister par : Inconnu")
     
+    embed_lines.append("")
+    embed_lines.append(f"raison: `{reason}`")
     embed_lines.append("")
     
     time_ago_text = time_ago(timestamp)
-    embed_lines.append(f"{time_ago_text}")
+    embed_lines.append(f"Il y'a {time_ago_text.replace('Il y a ', '')}")
     
     embed = create_white_embed("\n".join(embed_lines))
     
@@ -1136,7 +1156,7 @@ async def limits(ctx):
         else:
             limit_display = str(limit)
         
-        lines.append(f"**{grade}** : {limit_display} BL/heure")
+        lines.append(f"**{grade}** : {limit_display} BL/2h")
     
     lines.append(f"\n> La limite de bl par heure ce reset toute les **2 heures**")
     
