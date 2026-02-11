@@ -1134,14 +1134,12 @@ async def bl(ctx, identifier: str = None, *, reason: str = None):
             "Blacklist par": f"{ctx.author.mention} ({executor_display})",
             "Utilisateur BL": target_member.mention,
             "Raison": reason,
-            "Statut": "Sur serveur"
         })
     else:
         await send_log(ctx, "bl", {
             "Blacklist par": f"{ctx.author.mention} ({executor_display})",
             "Utilisateur BL": f"{user_name} (ID: {target_member.id})",
             "Raison": reason,
-            "Statut": "Hors serveur"
         })
 
 @bot.command()
