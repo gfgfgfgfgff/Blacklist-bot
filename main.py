@@ -490,11 +490,9 @@ async def help(ctx):
     )
     embed4.set_footer(text=f"Page 4/4 • {get_current_time_french()}")
 
-    view = discord.ui.View(timeout=3600)
-    view.add_item(discord.ui.Button(emoji="◀️", style=discord.ButtonStyle.gray, disabled=True))
-    view.add_item(discord.ui.Button(label="1/4", style=discord.ButtonStyle.gray, disabled=True))
-    view.add_item(discord.ui.Button(emoji="▶️", style=discord.ButtonStyle.gray))
-    await ctx.send(embed=embed1, view=view)
+    embeds = [embed1, embed2, embed3, embed4]
+view = PaginatorWithCounter(embeds, 4)
+await ctx.send(embed=embeds[0], view=view)
 
 @bot.command()
 @has_required_grade()
