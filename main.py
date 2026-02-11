@@ -687,11 +687,11 @@ async def protect(ctx,*,id=None):
     m,ison=r
     if is_protected(m.id):
         remove_protect(m.id)
-        embed=create_white_embed(f"🛡️ {m.mention} n'est plus protégé.")
+        embed=create_white_embed(f" {m.mention} n'est plus protégé.")
         await send_log(ctx,"protect",{"Retiré par":ctx.author.mention,"Utilisateur":m.mention})
     else:
         add_protect(m.id,m.name,ctx.author.id,ctx.author.name,get_current_time_french())
-        embed=create_white_embed(f"🛡️ {m.mention} est désormais protégé.")
+        embed=create_white_embed(f" {m.mention} est désormais protégé.")
         await send_log(ctx,"protect",{"Ajouté par":ctx.author.mention,"Utilisateur":m.mention})
     await ctx.send(embed=embed)
 
@@ -700,7 +700,7 @@ async def protect(ctx,*,id=None):
 async def protectlist(ctx):
     d=get_protect_list()
     if not d:return await ctx.send(embed=create_white_embed("Aucun utilisateur protégé."))
-    await ctx.send(embed=create_white_embed("**🛡️ Liste des protégés :**\n"+'\n'.join(f"• <@{i[0]}>"for i in d)))
+    await ctx.send(embed=create_white_embed("** Liste des protégés :**\n"+'\n'.join(f"• <@{i[0]}>"for i in d)))
 
 @bot.command()
 @commands.check(lambda ctx:ctx.author.id==ADMIN_USER_ID)
