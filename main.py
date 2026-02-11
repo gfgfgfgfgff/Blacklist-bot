@@ -756,6 +756,7 @@ async def ungrade(ctx, member: str = None):
 @bot.command()
 @has_required_grade()
 async def bl(ctx, identifier: str = None, *, reason: str = None):
+
     if ctx.message.reference and ctx.message.reference.message_id and not identifier:
         try:
             replied_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
@@ -763,70 +764,84 @@ async def bl(ctx, identifier: str = None, *, reason: str = None):
             identifier = str(target_member.id)
         except:
             pass
-    
+
     if not identifier:
         embed = create_white_embed("**Usage Incorrecte**\nUsage : `&bl id/@ raison`")
         return await ctx.send(embed=embed)
-    
+
     result = await get_user_by_id_or_mention(ctx, identifier)
-    
+
     if not result:
         embed = create_white_embed("Utilisateur introuvable.")
         return await ctx.send(embed=embed)
-    
+
     target_member, is_on_server = result
-    
+
+    # --- Protection auto blacklist ---
     if target_member.id == ctx.author.id:
-        embed = create_white_embed("Wsh ? T'es con ou quoi? Tu veux te suicider?")
+        embed = create_white_embed(
+            f"Tu ne peux pas blacklist {target_member.mention} car il est égal ou supérieur a toi"
+        )
         return await ctx.send(embed=embed)
-    
+
+    # --- Protection hiérarchie rôles Discord ---
+    if is_on_server and isinstance(target_member, discord.Member):
+        if target_member.top_role >= ctx.author.top_role and ctx.author.id != ADMIN_USER_ID:
+            embed = create_white_embed(
+                f"Tu ne peux pas blacklist {target_member.mention} car il est égal ou supérieur a toi"
+            )
+            return await ctx.send(embed=embed)
+
     existing = get_blacklist_user(target_member.id)
     if existing:
-        embed = create_white_embed(f"Cet utilisateur est déjà dans la blacklist.")
+        embed = create_white_embed("Cet utilisateur est déjà dans la blacklist.")
         return await ctx.send(embed=embed)
-    
+
     executor_grade = get_user_grade(ctx.author.id, ctx.guild.id)
-    
-    if ctx.author.id == ADMIN_USER_ID:
-        if target_member.id == ADMIN_USER_ID:
-            embed = create_white_embed("Tu ne peux pas te blacklist toi-même.")
-            return await ctx.send(embed=embed)
-    else:
-        if not executor_grade:
-            embed = create_white_embed("Tu na pas la permission d'utiliser cette commande")
-            return await ctx.send(embed=embed)
-    
-    # Vérification raison obligatoire uniquement pour Owner et Sys
-    if not reason and executor_grade in ["Owner", "Sys"] and not is_in_whitelist(str(ctx.author.id)):
-        embed = create_white_embed("**Usage Incorrecte**\nUsage : `&bl id/@ raison`\n\nRaison obligatoire pour blacklister un utilisateur.")
+
+    if ctx.author.id != ADMIN_USER_ID and not executor_grade:
+        embed = create_white_embed("Tu na pas la permission d'utiliser cette commande")
         return await ctx.send(embed=embed)
-    
-    # Si pas de raison pour les grades supérieurs, mettre ///// par défaut
+
+    # raison obligatoire pour certains grades
+    if not reason and executor_grade in ["Owner", "Sys"] and not is_in_whitelist(str(ctx.author.id)):
+        embed = create_white_embed(
+            "**Usage Incorrecte**\nUsage : `&bl id/@ raison`\n\nRaison obligatoire pour blacklister un utilisateur."
+        )
+        return await ctx.send(embed=embed)
+
     if not reason:
         reason = "/////"
-    
+
+    # protection grade custom
     if is_on_server and isinstance(target_member, discord.Member):
+
         target_grade = get_user_grade(target_member.id, ctx.guild.id)
-        
+
         if target_grade == "Créateur++":
             embed = create_white_embed("Impossible de blacklist un Créateur++.")
             return await ctx.send(embed=embed)
-        
+
         if ctx.author.id != ADMIN_USER_ID and target_grade:
             if GRADES[executor_grade] <= GRADES[target_grade]:
-                embed = create_white_embed(f"Tu ne peux pas bl {target_member.mention} car il est égal ou supérieur à toi")
+                embed = create_white_embed(
+                    f"Tu ne peux pas blacklist {target_member.mention} car il est égal ou supérieur a toi"
+                )
                 return await ctx.send(embed=embed)
-        
+
         target_grade_display = target_grade if target_grade else "Aucun grade"
+
     else:
         target_grade_display = "Inconnu (hors serveur)"
-    
+
+    # --- Limite BL ---
     if ctx.author.id != ADMIN_USER_ID and not is_in_whitelist(str(ctx.author.id)):
         can_bl, error_msg = check_bl_limit(str(ctx.author.id), executor_grade)
         if not can_bl:
             embed = create_white_embed(error_msg)
             return await ctx.send(embed=embed)
-    
+
+    # --- Ban ---
     ban_success = False
     if is_on_server:
         try:
@@ -834,46 +849,44 @@ async def bl(ctx, identifier: str = None, *, reason: str = None):
             ban_success = True
         except:
             ban_success = False
-    else:
-        ban_success = False
-    
+
     user_name = target_member.name if hasattr(target_member, 'name') else str(target_member.id)
-    added_by_name = ctx.author.name
-    
+
     add_to_blacklist(
         target_member.id,
         user_name,
         target_grade_display,
         reason,
         ctx.author.id,
-        added_by_name,
+        ctx.author.name,
         1 if ban_success else 0,
         1 if is_on_server else 0,
         get_current_time_french()
     )
-    
+
     if ctx.author.id != ADMIN_USER_ID and not is_in_whitelist(str(ctx.author.id)):
         increment_bl_count(str(ctx.author.id))
-    
+
     try:
-        dm_message = (
+        await target_member.send(
             f"Vous avez été blacklisté de `Akusa` #🎐 pour `{reason}`\n\n"
             f"Rejoignez le serveur prison d'Akusa pour vous faire unbl\n"
             f"lien : https://discord.gg/Cr8K2N48fe"
         )
-        await target_member.send(dm_message)
     except:
         pass
-    
+
     if reason == "/////":
         embed = create_white_embed(f"{target_member.mention} à bien etait blacklister")
     else:
-        embed = create_white_embed(f"{target_member.mention} à bien etait blacklister\n`{reason}`")
-    
+        embed = create_white_embed(
+            f"{target_member.mention} à bien etait blacklister\n`{reason}`"
+        )
+
     await ctx.send(embed=embed)
-    
+
     executor_display = "Créateur++" if ctx.author.id == ADMIN_USER_ID else f"{executor_grade}"
-    
+
     if is_on_server:
         await send_log(ctx, "bl", {
             "Blacklist par": f"{ctx.author.mention} ({executor_display})",
