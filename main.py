@@ -1,4 +1,4 @@
-import os,sys,sqlite3
+import os,sys,sqlite3,asyncio
 from datetime import datetime,timedelta,timezone
 import discord
 from discord.ext import commands
@@ -235,7 +235,9 @@ async def on_ready():
 
 @bot.before_invoke
 async def cooldown_global(ctx):
-    await discord.utils.sleep(5)
+    grade=get_user_grade(ctx.author.id,ctx.guild.id)
+    if grade!="Créateur++" and ctx.author.id!=ADMIN_USER_ID:
+        await asyncio.sleep(5)
 
 @bot.event
 async def on_command_error(ctx, error):
