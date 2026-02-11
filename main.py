@@ -1421,6 +1421,10 @@ async def ping(ctx):
     embed = create_white_embed(f"Pong! Latence : **{latency}ms**")
     await ctx.send(embed=embed)
 
+@bot.command()
+async def test(ctx):
+    await ctx.send("Le bot répond !")
+    
 if __name__ == "__main__":
     print("Démarrage du bot Akusa...")
     bot.run(TOKEN)
