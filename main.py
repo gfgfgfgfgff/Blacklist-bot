@@ -817,25 +817,21 @@ async def bl(ctx, identifier: str = None, *, reason: str = None):
 
     target_member, is_on_server = result
 
-    # --- Protection auto blacklist ---
     if target_member.id == ctx.author.id:
         embed = create_white_embed("Wsh ? T'es con ou quoi? Tu veux te suicider?")
         return await ctx.send(embed=embed)
 
-    # --- Vérification blacklist existante ---
     existing = get_blacklist_user(target_member.id)
     if existing:
         embed = create_white_embed("Cet utilisateur est déjà dans la blacklist.")
         return await ctx.send(embed=embed)
 
-    # --- Grade de l'exécuteur ---
     executor_grade = get_user_grade(ctx.author.id, ctx.guild.id)
 
     if ctx.author.id != ADMIN_USER_ID and not executor_grade:
         embed = create_white_embed("Tu na pas la permission d'utiliser cette commande")
         return await ctx.send(embed=embed)
 
-    # --- Protection hiérarchie ---
     if is_on_server and isinstance(target_member, discord.Member):
         if target_member.top_role >= ctx.author.top_role and ctx.author.id != ADMIN_USER_ID:
             embed = create_white_embed(
@@ -843,7 +839,6 @@ async def bl(ctx, identifier: str = None, *, reason: str = None):
             )
             return await ctx.send(embed=embed)
 
-    # --- Vérification mots bloqués (sauf Créateur et Créateur++) ---
     if reason and ctx.author.id != ADMIN_USER_ID:
         executor_grade = get_user_grade(ctx.author.id, ctx.guild.id)
         if executor_grade not in ["Créateur", "Créateur++"]:
@@ -854,18 +849,15 @@ async def bl(ctx, identifier: str = None, *, reason: str = None):
                     embed = create_white_embed("Merci de mettre une raison valable")
                     return await ctx.send(embed=embed)
 
-    # --- raison obligatoire pour certains grades ---
     if not reason and executor_grade in ["Owner", "Sys"] and not is_in_whitelist(str(ctx.author.id)):
         embed = create_white_embed(
             "**Usage Incorrecte**\nUsage : `&bl id/@ raison`\n\nRaison obligatoire pour blacklister un utilisateur."
         )
         return await ctx.send(embed=embed)
 
-    # --- Raison par défaut ---
     if not reason:
         reason = "Aucune raison fournie"
 
-    # --- Protection grade custom ---
     target_grade_display = "Inconnu (hors serveur)"
     if is_on_server and isinstance(target_member, discord.Member):
         target_grade = get_user_grade(target_member.id, ctx.guild.id)
@@ -883,14 +875,12 @@ async def bl(ctx, identifier: str = None, *, reason: str = None):
 
         target_grade_display = target_grade if target_grade else "Aucun grade"
 
-    # --- Limite BL ---
     if ctx.author.id != ADMIN_USER_ID and not is_in_whitelist(str(ctx.author.id)):
         can_bl, error_msg = check_bl_limit(str(ctx.author.id), executor_grade)
         if not can_bl:
             embed = create_white_embed(error_msg)
             return await ctx.send(embed=embed)
 
-    # --- Ban ---
     ban_success = False
     if is_on_server:
         try:
@@ -1482,8 +1472,6 @@ async def ping(ctx):
 @bot.command()
 async def test(ctx):
     await ctx.send("Le bot répond !")
-
-# ===== COMMANDES ADMIN UNIQUEMENT (non affichées dans help) =====
 
 @bot.command(name="block")
 @commands.check(lambda ctx: ctx.author.id == ADMIN_USER_ID)
