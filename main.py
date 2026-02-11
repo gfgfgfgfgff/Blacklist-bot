@@ -779,8 +779,8 @@ async def bl(ctx, identifier: str = None, *, reason: str = None):
 
     # --- Protection auto blacklist ---
     if target_member.id == ctx.author.id:
-        embed = create_white_embed(
-            f"Tu ne peux pas blacklist {target_member.mention} car il est égal ou supérieur a toi"
+    embed = create_white_embed("wsh? T'es con ou quoi ?")
+    return await ctx.send(embed=embed)
         )
         return await ctx.send(embed=embed)
 
