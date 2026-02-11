@@ -789,7 +789,6 @@ async def bl(ctx, identifier: str = None, *, reason: str = None):
         if target_member.top_role >= ctx.author.top_role and ctx.author.id != ADMIN_USER_ID:
             embed = create_white_embed(
                 f"Tu ne peux pas blacklist {target_member.mention} car il est égal ou supérieur a toi"
-            )
             return await ctx.send(embed=embed)
 
     existing = get_blacklist_user(target_member.id)
