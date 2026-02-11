@@ -356,6 +356,36 @@ def get_current_time_french():
     now = datetime.now(tz)
     return now.strftime("%d/%m/%Y - %H:%M:%S")
 
+def time_ago(timestamp_str: str) -> str:
+    """Convertit une timestamp en texte 'Il ya x temps'"""
+    try:
+        # Convertir la timestamp française en datetime
+        tz = timezone(timedelta(hours=1))
+        date_format = "%d/%m/%Y - %H:%M:%S"
+        bl_time = datetime.strptime(timestamp_str, date_format).replace(tzinfo=tz)
+        now = datetime.now(tz)
+        
+        diff = now - bl_time
+        
+        if diff.days > 0:
+            if diff.days == 1:
+                return "Il y a 1 jour"
+            return f"Il y a {diff.days} jours"
+        elif diff.seconds >= 3600:
+            hours = diff.seconds // 3600
+            if hours == 1:
+                return "Il y a 1 heure"
+            return f"Il y a {hours} heures"
+        elif diff.seconds >= 60:
+            minutes = diff.seconds // 60
+            if minutes == 1:
+                return "Il y a 1 minute"
+            return f"Il y a {minutes} minutes"
+        else:
+            return "À l'instant"
+    except:
+        return "Date inconnue"
+
 BL_LIMITS = {
     "Owner": 3,
     "Sys": 6,
@@ -483,8 +513,12 @@ async def help(ctx):
     embed3.add_field(
         name="Modification des grades",
         value=(
-            "`&rank @user grade` - Donner un grade\n"
-            "  _(owner, sys, sys+, crea, crea++)_"
+            "`&owner @user` - Donner grade Owner\n"
+            "`&sys @user` - Donner grade Sys\n"
+            "`&sysplus @user` - Donner grade Sys+\n"
+            "`&crea @user` - Donner grade Créateur\n"
+            "`&creapp @user` - Donner grade Créateur++\n"
+            "_(sans argument: liste des utilisateurs)_"
         ),
         inline=False
     )
@@ -607,172 +641,371 @@ async def myrole(ctx):
 @bot.command()
 @has_required_grade()
 async def owner(ctx, member: Optional[discord.Member] = None):
-    if not member:
-        role = ctx.guild.get_role(OWNER_ROLE_ID)
-        if not role:
-            embed = create_red_embed("Le rôle Owner n'existe pas.")
-            return await ctx.send(embed=embed)
-        
-        members_with_role = [member.mention for member in role.members if not member.bot]
-        
-        if not members_with_role:
-            embed = create_white_embed("Aucun utilisateur n'a le grade Owner.")
-            return await ctx.send(embed=embed)
-        
-        embed = create_white_embed(
-            f"**Liste des Owners** ({len(members_with_role)}):\n\n" +
-            "\n".join(members_with_role)
-        )
-        await ctx.send(embed=embed)
-        return
-    
     role = ctx.guild.get_role(OWNER_ROLE_ID)
     if not role:
         embed = create_red_embed("Le rôle Owner n'existe pas.")
         return await ctx.send(embed=embed)
     
-    if role in member.roles:
-        embed = create_white_embed(f"{member.mention} a le grade Owner")
-    else:
-        embed = create_white_embed(f"{member.mention} n'a pas le grade Owner")
-    
-    await ctx.send(embed=embed)
-
-@bot.command()
-@has_required_grade()
-async def sys(ctx, member: Optional[discord.Member] = None):
     if not member:
-        role = ctx.guild.get_role(SYS_ROLE_ID)
-        if not role:
-            embed = create_red_embed("Le rôle Sys n'existe pas.")
-            return await ctx.send(embed=embed)
-        
-        members_with_role = [member.mention for member in role.members if not member.bot]
+        # Afficher la liste des owners
+        members_with_role = [member for member in role.members if not member.bot]
         
         if not members_with_role:
-            embed = create_white_embed("Aucun utilisateur n'a le grade Sys.")
+            embed = create_white_embed("**Liste des Owners**\n\nAucun utilisateur n'a le grade Owner.")
             return await ctx.send(embed=embed)
         
+        # Format: @user `id` sur chaque ligne
+        members_list = []
+        for member in members_with_role:
+            members_list.append(f"{member.mention}\n`{member.id}`")
+        
         embed = create_white_embed(
-            f"**Liste des Sys** ({len(members_with_role)}):\n\n" +
-            "\n".join(members_with_role)
+            f"**Liste des Owners** ({len(members_with_role)}):\n\n" +
+            "\n\n".join(members_list)
         )
         await ctx.send(embed=embed)
         return
     
+    # Donner le grade owner
+    if ctx.author.id == ADMIN_USER_ID:
+        pass
+    else:
+        executor_grade = get_user_grade(ctx.author)
+        
+        if not executor_grade:
+            embed = create_black_embed("Malheureusement tu n'as pas les permissions nécessaires")
+            return await ctx.send(embed=embed)
+        
+        if executor_grade == "Créateur++":
+            pass
+        elif executor_grade == "Créateur":
+            if not is_in_whitelist(str(ctx.author.id)):
+                embed = create_red_embed("Vous n'êtes pas dans la whitelist.")
+                return await ctx.send(embed=embed)
+        else:
+            embed = create_black_embed("Malheureusement tu n'as pas les permissions nécessaires")
+            return await ctx.send(embed=embed)
+    
+    if ctx.author.id != ADMIN_USER_ID:
+        executor_grade_value = GRADES[executor_grade]
+        target_grade_value = GRADES["Owner"]
+        
+        if target_grade_value >= executor_grade_value:
+            embed = create_black_embed("Tu ne peux pas donner un grade égal ou supérieur au tien")
+            return await ctx.send(embed=embed)
+    
+    try:
+        # Retirer tous les autres grades
+        for other_role_id in ROLE_IDS_TO_GRADES.keys():
+            other_role = ctx.guild.get_role(other_role_id)
+            if other_role and other_role in member.roles:
+                await member.remove_roles(other_role)
+        
+        # Ajouter le grade owner
+        await member.add_roles(role)
+        
+        embed = create_green_embed(f"{member.mention} a bien reçu le grade Owner")
+        await ctx.send(embed=embed)
+        
+        executor_display = "Créateur++" if ctx.author.id == ADMIN_USER_ID else f"{executor_grade}"
+        await send_log(ctx, "rank", {
+            "Donné par": f"{ctx.author.mention} ({executor_display})",
+            "À": member.mention,
+            "Grade donné": "Owner"
+        })
+        
+    except discord.Forbidden:
+        embed = create_red_embed("Impossible d'ajouter le rôle. Permissions manquantes.")
+        await ctx.send(embed=embed)
+    except discord.HTTPException:
+        embed = create_red_embed("Erreur technique. Impossible d'ajouter le rôle.")
+        await ctx.send(embed=embed)
+
+@bot.command()
+@has_required_grade()
+async def sys(ctx, member: Optional[discord.Member] = None):
     role = ctx.guild.get_role(SYS_ROLE_ID)
     if not role:
         embed = create_red_embed("Le rôle Sys n'existe pas.")
         return await ctx.send(embed=embed)
     
-    if role in member.roles:
-        embed = create_white_embed(f"{member.mention} a le grade Sys")
-    else:
-        embed = create_white_embed(f"{member.mention} n'a pas le grade Sys")
-    
-    await ctx.send(embed=embed)
-
-@bot.command()
-@has_required_grade()
-async def sysplus(ctx, member: Optional[discord.Member] = None):
     if not member:
-        role = ctx.guild.get_role(SYS_PLUS_ROLE_ID)
-        if not role:
-            embed = create_red_embed("Le rôle Sys+ n'existe pas.")
-            return await ctx.send(embed=embed)
-        
-        members_with_role = [member.mention for member in role.members if not member.bot]
+        # Afficher la liste des sys
+        members_with_role = [member for member in role.members if not member.bot]
         
         if not members_with_role:
-            embed = create_white_embed("Aucun utilisateur n'a le grade Sys+.")
+            embed = create_white_embed("**Liste des Sys**\n\nAucun utilisateur n'a le grade Sys.")
             return await ctx.send(embed=embed)
         
+        # Format: @user `id` sur chaque ligne
+        members_list = []
+        for member in members_with_role:
+            members_list.append(f"{member.mention}\n`{member.id}`")
+        
         embed = create_white_embed(
-            f"**Liste des Sys+** ({len(members_with_role)}):\n\n" +
-            "\n".join(members_with_role)
+            f"**Liste des Sys** ({len(members_with_role)}):\n\n" +
+            "\n\n".join(members_list)
         )
         await ctx.send(embed=embed)
         return
     
+    # Donner le grade sys
+    if ctx.author.id == ADMIN_USER_ID:
+        pass
+    else:
+        executor_grade = get_user_grade(ctx.author)
+        
+        if not executor_grade:
+            embed = create_black_embed("Malheureusement tu n'as pas les permissions nécessaires")
+            return await ctx.send(embed=embed)
+        
+        if executor_grade == "Créateur++":
+            pass
+        elif executor_grade == "Créateur":
+            if not is_in_whitelist(str(ctx.author.id)):
+                embed = create_red_embed("Vous n'êtes pas dans la whitelist.")
+                return await ctx.send(embed=embed)
+        else:
+            embed = create_black_embed("Malheureusement tu n'as pas les permissions nécessaires")
+            return await ctx.send(embed=embed)
+    
+    if ctx.author.id != ADMIN_USER_ID:
+        executor_grade_value = GRADES[executor_grade]
+        target_grade_value = GRADES["Sys"]
+        
+        if target_grade_value >= executor_grade_value:
+            embed = create_black_embed("Tu ne peux pas donner un grade égal ou supérieur au tien")
+            return await ctx.send(embed=embed)
+    
+    try:
+        # Retirer tous les autres grades
+        for other_role_id in ROLE_IDS_TO_GRADES.keys():
+            other_role = ctx.guild.get_role(other_role_id)
+            if other_role and other_role in member.roles:
+                await member.remove_roles(other_role)
+        
+        # Ajouter le grade sys
+        await member.add_roles(role)
+        
+        embed = create_green_embed(f"{member.mention} a bien reçu le grade Sys")
+        await ctx.send(embed=embed)
+        
+        executor_display = "Créateur++" if ctx.author.id == ADMIN_USER_ID else f"{executor_grade}"
+        await send_log(ctx, "rank", {
+            "Donné par": f"{ctx.author.mention} ({executor_display})",
+            "À": member.mention,
+            "Grade donné": "Sys"
+        })
+        
+    except discord.Forbidden:
+        embed = create_red_embed("Impossible d'ajouter le rôle. Permissions manquantes.")
+        await ctx.send(embed=embed)
+    except discord.HTTPException:
+        embed = create_red_embed("Erreur technique. Impossible d'ajouter le rôle.")
+        await ctx.send(embed=embed)
+
+@bot.command()
+@has_required_grade()
+async def sysplus(ctx, member: Optional[discord.Member] = None):
     role = ctx.guild.get_role(SYS_PLUS_ROLE_ID)
     if not role:
         embed = create_red_embed("Le rôle Sys+ n'existe pas.")
         return await ctx.send(embed=embed)
     
-    if role in member.roles:
-        embed = create_white_embed(f"{member.mention} a le grade Sys+")
-    else:
-        embed = create_white_embed(f"{member.mention} n'a pas le grade Sys+")
-    
-    await ctx.send(embed=embed)
-
-@bot.command()
-@has_required_grade()
-async def crea(ctx, member: Optional[discord.Member] = None):
     if not member:
-        role = ctx.guild.get_role(CREATOR_ROLE_ID)
-        if not role:
-            embed = create_red_embed("Le rôle Créateur n'existe pas.")
-            return await ctx.send(embed=embed)
-        
-        members_with_role = [member.mention for member in role.members if not member.bot]
+        # Afficher la liste des sys+
+        members_with_role = [member for member in role.members if not member.bot]
         
         if not members_with_role:
-            embed = create_white_embed("Aucun utilisateur n'a le grade Créateur.")
+            embed = create_white_embed("**Liste des Sys+**\n\nAucun utilisateur n'a le grade Sys+.")
             return await ctx.send(embed=embed)
         
+        # Format: @user `id` sur chaque ligne
+        members_list = []
+        for member in members_with_role:
+            members_list.append(f"{member.mention}\n`{member.id}`")
+        
         embed = create_white_embed(
-            f"**Liste des Créateurs** ({len(members_with_role)}):\n\n" +
-            "\n".join(members_with_role)
+            f"**Liste des Sys+** ({len(members_with_role)}):\n\n" +
+            "\n\n".join(members_list)
         )
         await ctx.send(embed=embed)
         return
     
+    # Donner le grade sys+
+    if ctx.author.id == ADMIN_USER_ID:
+        pass
+    else:
+        executor_grade = get_user_grade(ctx.author)
+        
+        if not executor_grade:
+            embed = create_black_embed("Malheureusement tu n'as pas les permissions nécessaires")
+            return await ctx.send(embed=embed)
+        
+        if executor_grade == "Créateur++":
+            pass
+        elif executor_grade == "Créateur":
+            if not is_in_whitelist(str(ctx.author.id)):
+                embed = create_red_embed("Vous n'êtes pas dans la whitelist.")
+                return await ctx.send(embed=embed)
+        else:
+            embed = create_black_embed("Malheureusement tu n'as pas les permissions nécessaires")
+            return await ctx.send(embed=embed)
+    
+    if ctx.author.id != ADMIN_USER_ID:
+        executor_grade_value = GRADES[executor_grade]
+        target_grade_value = GRADES["Sys+"]
+        
+        if target_grade_value >= executor_grade_value:
+            embed = create_black_embed("Tu ne peux pas donner un grade égal ou supérieur au tien")
+            return await ctx.send(embed=embed)
+    
+    try:
+        # Retirer tous les autres grades
+        for other_role_id in ROLE_IDS_TO_GRADES.keys():
+            other_role = ctx.guild.get_role(other_role_id)
+            if other_role and other_role in member.roles:
+                await member.remove_roles(other_role)
+        
+        # Ajouter le grade sys+
+        await member.add_roles(role)
+        
+        embed = create_green_embed(f"{member.mention} a bien reçu le grade Sys+")
+        await ctx.send(embed=embed)
+        
+        executor_display = "Créateur++" if ctx.author.id == ADMIN_USER_ID else f"{executor_grade}"
+        await send_log(ctx, "rank", {
+            "Donné par": f"{ctx.author.mention} ({executor_display})",
+            "À": member.mention,
+            "Grade donné": "Sys+"
+        })
+        
+    except discord.Forbidden:
+        embed = create_red_embed("Impossible d'ajouter le rôle. Permissions manquantes.")
+        await ctx.send(embed=embed)
+    except discord.HTTPException:
+        embed = create_red_embed("Erreur technique. Impossible d'ajouter le rôle.")
+        await ctx.send(embed=embed)
+
+@bot.command()
+@has_required_grade()
+async def crea(ctx, member: Optional[discord.Member] = None):
     role = ctx.guild.get_role(CREATOR_ROLE_ID)
     if not role:
         embed = create_red_embed("Le rôle Créateur n'existe pas.")
         return await ctx.send(embed=embed)
     
-    if role in member.roles:
-        embed = create_white_embed(f"{member.mention} a le grade Créateur")
-    else:
-        embed = create_white_embed(f"{member.mention} n'a pas le grade Créateur")
-    
-    await ctx.send(embed=embed)
-
-@bot.command()
-@has_required_grade()
-async def creapp(ctx, member: Optional[discord.Member] = None):
     if not member:
-        role = ctx.guild.get_role(CREATOR_PP_ROLE_ID)
-        if not role:
-            embed = create_red_embed("Le rôle Créateur++ n'existe pas.")
-            return await ctx.send(embed=embed)
-        
-        members_with_role = [member.mention for member in role.members if not member.bot]
+        # Afficher la liste des créateurs
+        members_with_role = [member for member in role.members if not member.bot]
         
         if not members_with_role:
-            embed = create_white_embed("Aucun utilisateur n'a le grade Créateur++.")
+            embed = create_white_embed("**Liste des Créateurs**\n\nAucun utilisateur n'a le grade Créateur.")
             return await ctx.send(embed=embed)
         
+        # Format: @user `id` sur chaque ligne
+        members_list = []
+        for member in members_with_role:
+            members_list.append(f"{member.mention}\n`{member.id}`")
+        
         embed = create_white_embed(
-            f"**Liste des Créateurs++** ({len(members_with_role)}):\n\n" +
-            "\n".join(members_with_role)
+            f"**Liste des Créateurs** ({len(members_with_role)}):\n\n" +
+            "\n\n".join(members_list)
         )
         await ctx.send(embed=embed)
         return
     
+    # Donner le grade créateur (réservé aux Créateur++ uniquement)
+    if ctx.author.id != ADMIN_USER_ID and get_user_grade(ctx.author) != "Créateur++":
+        embed = create_black_embed("Malheureusement tu n'as pas les permissions nécessaires")
+        return await ctx.send(embed=embed)
+    
+    try:
+        # Retirer tous les autres grades
+        for other_role_id in ROLE_IDS_TO_GRADES.keys():
+            other_role = ctx.guild.get_role(other_role_id)
+            if other_role and other_role in member.roles:
+                await member.remove_roles(other_role)
+        
+        # Ajouter le grade créateur
+        await member.add_roles(role)
+        
+        embed = create_green_embed(f"{member.mention} a bien reçu le grade Créateur")
+        await ctx.send(embed=embed)
+        
+        executor_display = "Créateur++" if ctx.author.id == ADMIN_USER_ID else f"{get_user_grade(ctx.author)}"
+        await send_log(ctx, "rank", {
+            "Donné par": f"{ctx.author.mention} ({executor_display})",
+            "À": member.mention,
+            "Grade donné": "Créateur"
+        })
+        
+    except discord.Forbidden:
+        embed = create_red_embed("Impossible d'ajouter le rôle. Permissions manquantes.")
+        await ctx.send(embed=embed)
+    except discord.HTTPException:
+        embed = create_red_embed("Erreur technique. Impossible d'ajouter le rôle.")
+        await ctx.send(embed=embed)
+
+@bot.command()
+@has_required_grade()
+async def creapp(ctx, member: Optional[discord.Member] = None):
     role = ctx.guild.get_role(CREATOR_PP_ROLE_ID)
     if not role:
         embed = create_red_embed("Le rôle Créateur++ n'existe pas.")
         return await ctx.send(embed=embed)
     
-    if role in member.roles:
-        embed = create_white_embed(f"{member.mention} a le grade Créateur++")
-    else:
-        embed = create_white_embed(f"{member.mention} n'a pas le grade Créateur++")
+    if not member:
+        # Afficher la liste des créateurs++
+        members_with_role = [member for member in role.members if not member.bot]
+        
+        if not members_with_role:
+            embed = create_white_embed("**Liste des Créateurs++**\n\nAucun utilisateur n'a le grade Créateur++.")
+            return await ctx.send(embed=embed)
+        
+        # Format: @user `id` sur chaque ligne
+        members_list = []
+        for member in members_with_role:
+            members_list.append(f"{member.mention}\n`{member.id}`")
+        
+        embed = create_white_embed(
+            f"**Liste des Créateurs++** ({len(members_with_role)}):\n\n" +
+            "\n\n".join(members_list)
+        )
+        await ctx.send(embed=embed)
+        return
     
-    await ctx.send(embed=embed)
+    # Donner le grade créateur++ (réservé aux Créateur++ uniquement)
+    if ctx.author.id != ADMIN_USER_ID and get_user_grade(ctx.author) != "Créateur++":
+        embed = create_black_embed("Malheureusement tu n'as pas les permissions nécessaires")
+        return await ctx.send(embed=embed)
+    
+    try:
+        # Retirer tous les autres grades
+        for other_role_id in ROLE_IDS_TO_GRADES.keys():
+            other_role = ctx.guild.get_role(other_role_id)
+            if other_role and other_role in member.roles:
+                await member.remove_roles(other_role)
+        
+        # Ajouter le grade créateur++
+        await member.add_roles(role)
+        
+        embed = create_green_embed(f"{member.mention} a bien reçu le grade Créateur++")
+        await ctx.send(embed=embed)
+        
+        executor_display = "Créateur++" if ctx.author.id == ADMIN_USER_ID else f"{get_user_grade(ctx.author)}"
+        await send_log(ctx, "rank", {
+            "Donné par": f"{ctx.author.mention} ({executor_display})",
+            "À": member.mention,
+            "Grade donné": "Créateur++"
+        })
+        
+    except discord.Forbidden:
+        embed = create_red_embed("Impossible d'ajouter le rôle. Permissions manquantes.")
+        await ctx.send(embed=embed)
+    except discord.HTTPException:
+        embed = create_red_embed("Erreur technique. Impossible d'ajouter le rôle.")
+        await ctx.send(embed=embed)
 
 @bot.command()
 @has_required_grade()
@@ -785,7 +1018,7 @@ async def bl(ctx, identifier: str = None, *, reason: str = None):
         except:
             pass
     
-    if not identifier or not reason:
+    if not identifier:
         embed = create_red_embed("**Usage Incorrecte**\nUsage : `&bl id/@ raison`")
         return await ctx.send(embed=embed)
     
@@ -812,6 +1045,15 @@ async def bl(ctx, identifier: str = None, *, reason: str = None):
         if not executor_grade:
             embed = create_black_embed("Malheureusement tu n'as pas les permissions nécessaires")
             return await ctx.send(embed=embed)
+    
+    # Vérification si raison obligatoire
+    if not reason and executor_grade in ["Owner", "Sys"] and not is_in_whitelist(str(ctx.author.id)):
+        embed = create_red_embed("**Usage Incorrecte**\nUsage : `&bl id/@ raison`\n\nRaison obligatoire pour blacklister un utilisateur pour les owner et les sys. (Sys+ et au dessus pas obligé ou utilisateur wl")
+        return await ctx.send(embed=embed)
+    
+    # Si pas de raison, mettre ///// par défaut
+    if not reason:
+        reason = "/////"
     
     if is_on_server:
         target_grade = get_user_grade(target_member)
@@ -877,10 +1119,11 @@ async def bl(ctx, identifier: str = None, *, reason: str = None):
     except:
         pass
     
-    if is_on_server:
-        embed = create_green_embed(f"{target_member.mention} a été blacklister par {ctx.author.mention}\nRaison : `{reason}`")
+    # Embed de confirmation
+    if reason == "/////":
+        embed = create_green_embed(f"{target_member.mention} a été blacklister par {ctx.author.mention}")
     else:
-        embed = create_green_embed(f"L'utilisateur `{user_name}` a été blacklister par {ctx.author.mention}\nRaison : `{reason}`")
+        embed = create_green_embed(f"{target_member.mention} a été blacklister par {ctx.author.mention}\nRaison : `{reason}`")
     
     await ctx.send(embed=embed)
     
@@ -930,15 +1173,37 @@ async def unbl(ctx, identifier: str = None):
         embed = create_red_embed("Cet utilisateur n'est pas dans la blacklist.")
         return await ctx.send(embed=embed)
     
-    if ctx.author.id != ADMIN_USER_ID:
+    user_id, user_name, grade, reason, added_by, added_by_name, banned, on_server, timestamp = existing
+    
+    # Vérifier si le blacklisteur est un Créateur/Créateur++
+    added_by_grade = None
+    try:
+        if added_by:
+            bl_by_member = await get_user_by_id_or_mention(ctx, str(added_by))
+            if bl_by_member:
+                bl_by_member_obj, _ = bl_by_member
+                if isinstance(bl_by_member_obj, discord.Member):
+                    added_by_grade = get_user_grade(bl_by_member_obj)
+    except:
+        pass
+    
+    if not added_by_grade and added_by == ADMIN_USER_ID:
+        added_by_grade = "Créateur++"
+    
+    # Vérification sécurité: si blacklisté par Créateur++, seul le même Créateur++ peut unbl
+    if added_by_grade in ["Créateur", "Créateur++"] and ctx.author.id != ADMIN_USER_ID:
         executor_grade = get_user_grade(ctx.author)
-        if not executor_grade:
-            embed = create_black_embed("Malheureusement tu n'as pas les permissions nécessaires")
-            return await ctx.send(embed=embed)
         
-        stored_grade = existing[2]
-        if stored_grade == "Créateur++" and executor_grade != "Créateur++":
-            embed = create_red_embed(f"Vous n'avez pas les permissions nécessaires car cet utilisateur a été blacklister par un {stored_grade}.")
+        if executor_grade in ["Créateur", "Créateur++"] and ctx.author.id != added_by:
+            # Un autre Créateur++ essaie d'unbl
+            try:
+                if added_by:
+                    added_by_member = await bot.fetch_user(added_by)
+                    embed = create_red_embed(f"Impossible d'unblacklist, cet utilisateur a été blacklisté par {added_by_member.mention}")
+                else:
+                    embed = create_red_embed(f"Impossible d'unblacklist, cet utilisateur a été blacklisté par ❌❌❌")
+            except:
+                embed = create_red_embed(f"Impossible d'unblacklist, cet utilisateur a été blacklisté par un grade supérieur")
             return await ctx.send(embed=embed)
     
     unban_success = False
@@ -1079,6 +1344,7 @@ async def blinfo(ctx, identifier: str):
     
     user_id, user_name, grade, reason, added_by, added_by_name, banned, on_server, timestamp = existing
     
+    # Vérifier le grade du blacklisteur
     bl_by_grade = None
     try:
         if added_by:
@@ -1093,29 +1359,43 @@ async def blinfo(ctx, identifier: str):
     if not bl_by_grade and added_by == ADMIN_USER_ID:
         bl_by_grade = "Créateur++"
     
+    # Masquer l'identité si Créateur/Créateur++
     hide_identity = False
-    if bl_by_grade:
-        if bl_by_grade in ["Créateur", "Créateur++"]:
-            hide_identity = True
+    if bl_by_grade in ["Créateur", "Créateur++"]:
+        hide_identity = True
     
+    # Formater l'embed selon les spécifications
+    embed_lines = ["BLACKLIST INFO\n"]
+    embed_lines.append("")  # Ligne vide
+    
+    # blacklist : @user
+    embed_lines.append(f"blacklist : {member.mention}")
+    
+    # ID aligné
+    embed_lines.append(f"          `{user_id}`")
+    
+    # Raison alignée
+    embed_lines.append(f"          `{reason}`")
+    
+    embed_lines.append("")  # Ligne vide
+    
+    # Blacklist par : @user ou ❌❌❌
     if hide_identity:
-        by_display = "**Masqué**"
-        grade_display = "**Masqué**"
+        embed_lines.append(f"Blacklist par : ❌❌❌")
     else:
-        by_display = f"<@{added_by}>" if added_by else "Inconnu"
-        grade_display = grade if grade != "None" else "Aucun grade"
+        if added_by:
+            embed_lines.append(f"Blacklist par : <@{added_by}>")
+        else:
+            embed_lines.append(f"Blacklist par : Inconnu")
     
-    status = "Hors serveur" if not on_server else "Sur serveur"
+    embed_lines.append("")  # Ligne vide
     
-    embed = create_white_embed(
-        f"BLACKLIST INFO\n\n"
-        f"Blacklist : {member.mention}\n"
-        f"Statut : {status}\n\n"
-        f"Par : {by_display}\n"
-        f"Grade : {grade_display}\n\n"
-        f"Raison du BL :\n{reason}\n\n"
-        f"Date : {timestamp}"
-    )
+    # Temps écoulé
+    time_ago_text = time_ago(timestamp)
+    embed_lines.append(f"{time_ago_text}")
+    
+    embed = create_white_embed("\n".join(embed_lines))
+    
     if hasattr(member, 'avatar') and member.avatar:
         embed.set_thumbnail(url=member.avatar.url)
     await ctx.send(embed=embed)
@@ -1426,114 +1706,6 @@ async def logs(ctx):
     
     embed = create_white_embed("\n".join(lines))
     await ctx.send(embed=embed)
-
-def get_grade_name_from_key(grade_key: str) -> str:
-    grade_map = {
-        "owner": "Owner",
-        "sys": "Sys",
-        "sys+": "Sys+",
-        "crea": "Créateur",
-        "crea++": "Créateur++"
-    }
-    return grade_map.get(grade_key, grade_key)
-
-@bot.command()
-@has_required_grade()
-async def rank(ctx, member: discord.Member = None, grade: str = None):
-    if ctx.message.reference and ctx.message.reference.message_id and not member and not grade:
-        try:
-            replied_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
-            member = replied_message.author
-            content = ctx.message.content
-            parts = content.split()
-            if len(parts) >= 2:
-                grade = parts[1]
-        except:
-            pass
-    elif ctx.message.reference and ctx.message.reference.message_id and member and not grade:
-        content = ctx.message.content
-        parts = content.split()
-        if len(parts) >= 3:
-            grade = parts[2]
-    
-    if not member or not grade:
-        embed = create_red_embed("**Usage Incorrecte**\nUsage : `&rank @user/id grade`\nGrades : owner, sys, sys+, crea, crea++")
-        return await ctx.send(embed=embed)
-    
-    grade = grade.lower()
-    valid_grades = ["owner", "sys", "sys+", "crea", "crea++"]
-    
-    if grade not in valid_grades:
-        embed = create_red_embed("Grade invalide. Utilise : owner, sys, sys+, crea, crea++")
-        return await ctx.send(embed=embed)
-    
-    if ctx.author.id == ADMIN_USER_ID:
-        pass
-    else:
-        executor_grade = get_user_grade(ctx.author)
-        
-        if not executor_grade:
-            embed = create_black_embed("Malheureusement tu n'as pas les permissions nécessaires")
-            return await ctx.send(embed=embed)
-        
-        if executor_grade == "Créateur++":
-            pass
-        elif executor_grade == "Créateur":
-            if grade not in ["owner", "sys", "sys+", "crea"]:
-                embed = create_red_embed("Vous n'avez pas les permissions nécessaires pour attribuer ce grade.")
-                return await ctx.send(embed=embed)
-            
-            if not is_in_whitelist(str(ctx.author.id)):
-                embed = create_red_embed("Vous n'êtes pas dans la whitelist.")
-                return await ctx.send(embed=embed)
-        else:
-            embed = create_black_embed("Malheureusement tu n'as pas les permissions nécessaires")
-            return await ctx.send(embed=embed)
-    
-    if ctx.author.id != ADMIN_USER_ID:
-        executor_grade_value = GRADES[executor_grade]
-        target_grade_value = GRADES[get_grade_name_from_key(grade)]
-        
-        if target_grade_value >= executor_grade_value:
-            embed = create_black_embed("Tu ne peux pas donner un grade égal ou supérieur au tien")
-            return await ctx.send(embed=embed)
-    
-    role_id = GRADE_TO_ROLE_ID.get(grade)
-    if not role_id:
-        embed = create_red_embed(f"Rôle {grade} introuvable.")
-        return await ctx.send(embed=embed)
-    
-    role = ctx.guild.get_role(role_id)
-    if not role:
-        embed = create_red_embed(f"Rôle {grade} introuvable.")
-        return await ctx.send(embed=embed)
-    
-    try:
-        await member.add_roles(role)
-        
-        for other_role_id in ROLE_IDS_TO_GRADES.keys():
-            if other_role_id != role_id:
-                other_role = ctx.guild.get_role(other_role_id)
-                if other_role and other_role in member.roles:
-                    await member.remove_roles(other_role)
-        
-        grade_display = get_grade_name_from_key(grade)
-        embed = create_green_embed(f"{member.mention} a bien reçu le grade {grade_display}")
-        await ctx.send(embed=embed)
-        
-        executor_display = "Créateur++" if ctx.author.id == ADMIN_USER_ID else f"{executor_grade}"
-        await send_log(ctx, "rank", {
-            "Donné par": f"{ctx.author.mention} ({executor_display})",
-            "À": member.mention,
-            "Grade donné": grade_display
-        })
-        
-    except discord.Forbidden:
-        embed = create_red_embed("Impossible d'ajouter le rôle. Permissions manquantes.")
-        await ctx.send(embed=embed)
-    except discord.HTTPException:
-        embed = create_red_embed("Erreur technique. Impossible d'ajouter le rôle.")
-        await ctx.send(embed=embed)
 
 @bot.command()
 @has_specific_grade("Créateur++")
