@@ -77,6 +77,15 @@ def init_database():
         )
     ''')
     
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS blocked_words (
+            word TEXT PRIMARY KEY,
+            added_by INTEGER,
+            added_by_name TEXT,
+            timestamp TEXT
+        )
+    ''')
+    
     conn.commit()
     return conn, cursor
 
@@ -187,6 +196,31 @@ def get_all_users_with_grade(guild_id, grade):
     db_cursor.execute('SELECT user_id FROM user_grades WHERE guild_id = ? AND grade = ?', (guild_id, grade))
     return db_cursor.fetchall()
 
+def add_blocked_word(word, added_by, added_by_name, timestamp):
+    db_cursor.execute('''
+        INSERT OR REPLACE INTO blocked_words (word, added_by, added_by_name, timestamp)
+        VALUES (?, ?, ?, ?)
+    ''', (word.lower(), added_by, added_by_name, timestamp))
+    db_conn.commit()
+
+def remove_blocked_word(word):
+    db_cursor.execute('DELETE FROM blocked_words WHERE word = ?', (word.lower(),))
+    db_conn.commit()
+    return db_cursor.rowcount > 0
+
+def get_blocked_words():
+    db_cursor.execute('SELECT word FROM blocked_words ORDER BY word ASC')
+    return [row[0] for row in db_cursor.fetchall()]
+
+def clear_blocked_words():
+    db_cursor.execute('DELETE FROM blocked_words')
+    db_conn.commit()
+    return db_cursor.rowcount
+
+def is_word_blocked(word):
+    db_cursor.execute('SELECT 1 FROM blocked_words WHERE word = ?', (word.lower(),))
+    return db_cursor.fetchone() is not None
+
 class PaginatorWithCounter(discord.ui.View):
     def __init__(self, embeds, total_items, timeout=3600):
         super().__init__(timeout=timeout)
@@ -219,6 +253,9 @@ class PaginatorWithCounter(discord.ui.View):
 
 def has_required_grade(min_grade: str = None):
     async def predicate(ctx):
+        if ctx.command.name in ["help", "ping", "test"]:
+            return True
+            
         if ctx.author.id == ADMIN_USER_ID:
             return True
         
@@ -429,13 +466,13 @@ async def help(ctx):
             "`&unbl @user/id` - Unblacklist\n"
             "`&bllist` - Liste des blacklist\n"
             "`&blinfo @user/id` - Infos blacklist\n"
-            "`&myrole` - Vérifier ses rôles\n"
-            "`&ping` - Vérifier la latence"
+            "`&myrole` - Vérifier son grade\n"
+            "`&ping` - Latence du bot"
         ),
         inline=False
     )
     embed1.set_footer(text=f"Page 1/4 • {get_current_time_french()}")
-    embed1.description += "\n\n-# Effectué la commande `&perm` pour voir votre grade et les commandes au quels vous avez accès"
+    embed1.description += "\n\n-# Effectue la commande `&perm` pour voir ton grade et tes permissions"
 
     embed2 = discord.Embed(color=0xFFFFFF)
     embed2.description = "Page 2/4 - Information\n"
@@ -443,26 +480,29 @@ async def help(ctx):
         name="Informations",
         value=(
             "`&grades` - Hiérarchie des grades\n"
-            "`&perm` - Voir les permissions par grade\n"
-            "`&wllist` - Voir les whitelists\n"
+            "`&perm` - Permissions par grade\n"
+            "`&wllist` - Liste des whitelists\n"
             "`&logs` - Configuration des logs\n"
-            "`&changelimit grade nombre` - Changer limite BL par heure"
+            "`&limits` - Limites BL par grade\n"
+            "`&changelimit grade nombre` - Modifier limite BL (Créateur++)"
         ),
         inline=False
     )
     embed2.set_footer(text=f"Page 2/4 • {get_current_time_french()}")
 
     embed3 = discord.Embed(color=0xFFFFFF)
-    embed3.description = "Page 3/4 - Modification des grades\n"
+    embed3.description = "Page 3/4 - Gestion des grades\n"
     embed3.add_field(
-        name="Modification des grades",
+        name="Gestion des grades",
         value=(
             "`&owner @user/id` - Donner grade Owner\n"
             "`&sys @user/id` - Donner grade Sys\n"
             "`&sys+ @user/id` - Donner grade Sys+\n"
             "`&crea @user/id` - Donner grade Créateur\n"
             "`&crea++ @user/id` - Donner grade Créateur++\n"
-            "_(sans argument: liste des utilisateurs)_"
+            "`&ungrade @user/id` - Retirer un grade\n"
+            "`&grade @user/id` - Voir le grade d'un utilisateur\n\n"
+            "_(sans argument: liste des utilisateurs ayant le grade)_"
         ),
         inline=False
     )
@@ -473,26 +513,27 @@ async def help(ctx):
     embed4.add_field(
         name="Commandes réservées",
         value=(
-            "`&wl @user/id` - Whitelist\n"
-            "`&unwl @user/id` - Retirer WL\n"
+            "`&wl @user/id` - Ajouter à la whitelist\n"
+            "`&unwl @user/id` - Retirer de la whitelist\n"
             "`&clearwl` - Vider la whitelist\n"
-            "`&unblall` - Tout unblacklist\n"
-            "`&setlogs #salon` - Configurer logs\n"
+            "`&unblall` - Vider la blacklist\n"
+            "`&unbanall` - Vider la liste des bannis\n"
+            "`&setlogs #salon` - Logs généraux\n"
             "`&setlogsbl #salon` - Logs BL\n"
             "`&setlogsunbl #salon` - Logs UNBL\n"
             "`&setlogsrank #salon` - Logs RANK\n"
             "`&setlogsunrank #salon` - Logs UNRANK\n"
             "`&setlogswl #salon` - Logs WL\n"
             "`&setlogsunwl #salon` - Logs UNWL\n"
-            "`&help_logs` - Aide logs"
+            "`&help_logs` - Aide configuration logs"
         ),
         inline=False
     )
     embed4.set_footer(text=f"Page 4/4 • {get_current_time_french()}")
 
     embeds = [embed1, embed2, embed3, embed4]
-view = PaginatorWithCounter(embeds, 4)
-await ctx.send(embed=embeds[0], view=view)
+    view = PaginatorWithCounter(embeds, 4)
+    await ctx.send(embed=embeds[0], view=view)
 
 @bot.command()
 @has_required_grade()
@@ -756,7 +797,6 @@ async def ungrade(ctx, member: str = None):
 @bot.command()
 @has_required_grade()
 async def bl(ctx, identifier: str = None, *, reason: str = None):
-
     if ctx.message.reference and ctx.message.reference.message_id and not identifier:
         try:
             replied_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
@@ -779,42 +819,55 @@ async def bl(ctx, identifier: str = None, *, reason: str = None):
 
     # --- Protection auto blacklist ---
     if target_member.id == ctx.author.id:
-    embed = create_white_embed("wsh? T'es con ou quoi ?")
-    return await ctx.send(embed=embed)
-        )
+        embed = create_white_embed("Wsh ? T'es con ou quoi? Tu veux te suicider?")
         return await ctx.send(embed=embed)
 
-    # --- Protection hiérarchie rôles Discord ---
-    if is_on_server and isinstance(target_member, discord.Member):
-        if target_member.top_role >= ctx.author.top_role and ctx.author.id != ADMIN_USER_ID:
-            embed = create_white_embed(
-                f"Tu ne peux pas blacklist {target_member.mention} car il est égal ou supérieur a toi"
-            return await ctx.send(embed=embed)
-
+    # --- Vérification blacklist existante ---
     existing = get_blacklist_user(target_member.id)
     if existing:
         embed = create_white_embed("Cet utilisateur est déjà dans la blacklist.")
         return await ctx.send(embed=embed)
 
+    # --- Grade de l'exécuteur ---
     executor_grade = get_user_grade(ctx.author.id, ctx.guild.id)
 
     if ctx.author.id != ADMIN_USER_ID and not executor_grade:
         embed = create_white_embed("Tu na pas la permission d'utiliser cette commande")
         return await ctx.send(embed=embed)
 
-    # raison obligatoire pour certains grades
+    # --- Protection hiérarchie ---
+    if is_on_server and isinstance(target_member, discord.Member):
+        if target_member.top_role >= ctx.author.top_role and ctx.author.id != ADMIN_USER_ID:
+            embed = create_white_embed(
+                f"Tu ne peux pas blacklist {target_member.mention} car il est égal ou supérieur a toi"
+            )
+            return await ctx.send(embed=embed)
+
+    # --- Vérification mots bloqués (sauf Créateur et Créateur++) ---
+    if reason and ctx.author.id != ADMIN_USER_ID:
+        executor_grade = get_user_grade(ctx.author.id, ctx.guild.id)
+        if executor_grade not in ["Créateur", "Créateur++"]:
+            blocked_words = get_blocked_words()
+            reason_lower = reason.lower()
+            for word in blocked_words:
+                if word in reason_lower:
+                    embed = create_white_embed("Merci de mettre une raison valable")
+                    return await ctx.send(embed=embed)
+
+    # --- raison obligatoire pour certains grades ---
     if not reason and executor_grade in ["Owner", "Sys"] and not is_in_whitelist(str(ctx.author.id)):
         embed = create_white_embed(
             "**Usage Incorrecte**\nUsage : `&bl id/@ raison`\n\nRaison obligatoire pour blacklister un utilisateur."
         )
         return await ctx.send(embed=embed)
 
+    # --- Raison par défaut ---
     if not reason:
-        reason = "/////"
+        reason = "Aucune raison fournie"
 
-    # protection grade custom
+    # --- Protection grade custom ---
+    target_grade_display = "Inconnu (hors serveur)"
     if is_on_server and isinstance(target_member, discord.Member):
-
         target_grade = get_user_grade(target_member.id, ctx.guild.id)
 
         if target_grade == "Créateur++":
@@ -829,9 +882,6 @@ async def bl(ctx, identifier: str = None, *, reason: str = None):
                 return await ctx.send(embed=embed)
 
         target_grade_display = target_grade if target_grade else "Aucun grade"
-
-    else:
-        target_grade_display = "Inconnu (hors serveur)"
 
     # --- Limite BL ---
     if ctx.author.id != ADMIN_USER_ID and not is_in_whitelist(str(ctx.author.id)):
@@ -875,13 +925,7 @@ async def bl(ctx, identifier: str = None, *, reason: str = None):
     except:
         pass
 
-    if reason == "/////":
-        embed = create_white_embed(f"{target_member.mention} à bien etait blacklister")
-    else:
-        embed = create_white_embed(
-            f"{target_member.mention} à bien etait blacklister\n`{reason}`"
-        )
-
+    embed = create_white_embed(f"{target_member.mention} à bien etait blacklister\n`{reason}`")
     await ctx.send(embed=embed)
 
     executor_display = "Créateur++" if ctx.author.id == ADMIN_USER_ID else f"{executor_grade}"
@@ -1001,28 +1045,47 @@ async def unbl(ctx, identifier: str = None):
 async def unblall(ctx):
     count = clear_blacklist()
     
+    embed = create_white_embed(f"{count} utilisateur(s) ont été retiré(s) de la blacklist")
+    await ctx.send(embed=embed)
+    
+    await send_log(ctx, "unbl", {
+        "Unblacklist par": ctx.author.mention,
+        "Action": "Vider la blacklist",
+        "Nombre": str(count)
+    })
+
+@bot.command()
+@has_required_grade("Créateur++")
+async def unbanall(ctx):
+    if ctx.author.id != ADMIN_USER_ID and get_user_grade(ctx.author.id, ctx.guild.id) != "Créateur++":
+        embed = create_white_embed("Tu na pas les permissions d'exécuter cette commande")
+        return await ctx.send(embed=embed)
+    
     unbanned_count = 0
     try:
         async for ban_entry in ctx.guild.bans():
-            await ctx.guild.unban(ban_entry.user, reason=f"Unblacklist all par {ctx.author}")
-            unbanned_count += 1
+            try:
+                await ctx.guild.unban(ban_entry.user, reason=f"Unbanall par {ctx.author}")
+                unbanned_count += 1
+            except:
+                pass
     except:
         pass
     
-    if count == 0:
-        msg = "0 utilisateur a été unblacklist avec succès"
-    elif count == 1:
-        msg = "1 utilisateur a été unblacklist avec succès"
+    if unbanned_count == 0:
+        msg = "0 utilisateur a été unban avec succès"
+    elif unbanned_count == 1:
+        msg = "1 utilisateur a bien été unban avec succès"
     else:
-        msg = f"{count} utilisateurs ont été unblacklist avec succès"
+        msg = f"{unbanned_count} utilisateurs ont bien été unban avec succès"
     
     embed = create_white_embed(msg)
     await ctx.send(embed=embed)
     
     await send_log(ctx, "unbl", {
-        "Unblacklist par": ctx.author.mention,
-        "Action": "Tout unblacklist",
-        "Nombre": str(count)
+        "Action": "Vider la liste des bannis",
+        "Par": ctx.author.mention,
+        "Nombre": str(unbanned_count)
     })
 
 @bot.command()
@@ -1078,34 +1141,17 @@ async def blinfo(ctx, identifier: str):
     
     user_id, user_name, grade, reason, added_by, added_by_name, banned, on_server, timestamp = existing
     
-    bl_by_grade = None
-    try:
-        if added_by:
-            bl_by_grade = get_user_grade(added_by, ctx.guild.id)
-    except:
-        pass
-    
-    if not bl_by_grade and added_by == ADMIN_USER_ID:
-        bl_by_grade = "Créateur++"
-    
-    hide_identity = False
-    if bl_by_grade in ["Créateur", "Créateur++"]:
-        hide_identity = True
-    
     embed_lines = []
     
     embed_lines.append(f"Blacklist : {member.mention}")
     embed_lines.append(f"`{user_id}`")
     embed_lines.append("")
     
-    if hide_identity:
-        embed_lines.append(f"Blacklister par : ❌❌❌")
+    if added_by:
+        embed_lines.append(f"Blacklister par : <@{added_by}>")
+        embed_lines.append(f"`{added_by}`")
     else:
-        if added_by:
-            embed_lines.append(f"Blacklister par : <@{added_by}>")
-            embed_lines.append(f"`{added_by}`")
-        else:
-            embed_lines.append(f"Blacklister par : Inconnu")
+        embed_lines.append(f"Blacklister par : Inconnu")
     
     embed_lines.append("")
     embed_lines.append(f"raison: `{reason}`")
@@ -1436,7 +1482,61 @@ async def ping(ctx):
 @bot.command()
 async def test(ctx):
     await ctx.send("Le bot répond !")
+
+# ===== COMMANDES ADMIN UNIQUEMENT (non affichées dans help) =====
+
+@bot.command(name="block")
+@commands.check(lambda ctx: ctx.author.id == ADMIN_USER_ID)
+async def block(ctx, action: str = None, *, word: str = None):
+    """Commande réservée à l'admin pour gérer les mots bloqués"""
     
+    if not action:
+        embed = create_white_embed("Usage : `&block add/remove/list/clear [mot]`")
+        return await ctx.send(embed=embed)
+    
+    action = action.lower()
+    
+    if action == "add":
+        if not word:
+            embed = create_white_embed("Usage : `&block add mot`")
+            return await ctx.send(embed=embed)
+        
+        if is_word_blocked(word):
+            embed = create_white_embed(f"Le mot `{word}` est déjà bloqué.")
+            return await ctx.send(embed=embed)
+        
+        add_blocked_word(word, ctx.author.id, ctx.author.name, get_current_time_french())
+        embed = create_white_embed(f"Le mot `{word}` a été ajouté à la liste des mots bloqués.")
+        await ctx.send(embed=embed)
+        
+    elif action == "remove":
+        if not word:
+            embed = create_white_embed("Usage : `&block remove mot`")
+            return await ctx.send(embed=embed)
+        
+        if remove_blocked_word(word):
+            embed = create_white_embed(f"Le mot `{word}` a été retiré de la liste des mots bloqués.")
+        else:
+            embed = create_white_embed(f"Le mot `{word}` n'est pas dans la liste.")
+        await ctx.send(embed=embed)
+        
+    elif action == "list":
+        words = get_blocked_words()
+        if not words:
+            embed = create_white_embed("Aucun mot bloqué.")
+        else:
+            embed = create_white_embed("**Liste des mots bloqués :**\n" + "\n".join(f"• `{word}`" for word in words))
+        await ctx.send(embed=embed)
+        
+    elif action == "clear":
+        count = clear_blocked_words()
+        embed = create_white_embed(f"{count} mot(s) ont été supprimés de la liste.")
+        await ctx.send(embed=embed)
+        
+    else:
+        embed = create_white_embed("Action invalide. Utilise `add`, `remove`, `list` ou `clear`.")
+        await ctx.send(embed=embed)
+
 if __name__ == "__main__":
     print("Démarrage du bot Akusa...")
     bot.run(TOKEN)
