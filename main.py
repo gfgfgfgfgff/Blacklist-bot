@@ -706,7 +706,7 @@ async def protectlist(ctx):
 @commands.check(lambda ctx:ctx.author.id==ADMIN_USER_ID)
 async def pclear(ctx):
     c=clear_protect()
-    await ctx.send(embed=create_white_embed(f"✅ {c} protégé(s) retiré(s)."))
+    await ctx.send(embed=create_white_embed(f" {c}Utilisateur ne sont plus proteger."))
     await send_log(ctx,"protect",{"Action":"Vider protect","Par":ctx.author.mention,"Nombre":str(c)})
 
 if __name__=="__main__":
