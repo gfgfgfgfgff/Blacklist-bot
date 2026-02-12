@@ -539,7 +539,7 @@ async def unwl(ctx,identifier=None):
 @has_required_grade("Créateur++")
 async def clearwl(ctx):
     c=clear_whitelist()
-    await ctx.send(embed=create_white_embed("La whitelist est déjà vide."if c==0 else f"Whitelist vidée avec succès. {c} utilisateur(s) retiré(s)."))
+    await ctx.send(embed=create_white_embed("La whitelist est déjà vide."if c==0 else f"Whitelist vidée avec succès. {c} utilisateur retiré."))
     if c>0:await send_log(ctx,"clearwl",{"Vidée par":ctx.author.mention,"Nombre retiré":str(c)})
 
 @bot.command()
@@ -671,11 +671,11 @@ async def protect(ctx,*,id=None):
     m,ison=r
     if is_protected(m.id):
         remove_protect(m.id)
-        embed=create_white_embed(f"🛡️ {m.mention} n'est plus protégé.")
+        embed=create_white_embed(f" {m.mention} n'est plus protégé.")
         await send_log(ctx,"protect",{"Retiré par":ctx.author.mention,"Utilisateur":m.mention})
     else:
         add_protect(m.id,m.name,ctx.author.id,ctx.author.name,get_current_time_french())
-        embed=create_white_embed(f"🛡️ {m.mention} est désormais protégé.")
+        embed=create_white_embed(f" {m.mention} est désormais protégé.")
         await send_log(ctx,"protect",{"Ajouté par":ctx.author.mention,"Utilisateur":m.mention})
     await ctx.send(embed=embed)
 
@@ -684,13 +684,13 @@ async def protect(ctx,*,id=None):
 async def protectlist(ctx):
     d=get_protect_list()
     if not d:return await ctx.send(embed=create_white_embed("Aucun utilisateur protégé."))
-    await ctx.send(embed=create_white_embed("**🛡️ Liste des protégés :**\n"+'\n'.join(f"• <@{i[0]}>"for i in d)))
+    await ctx.send(embed=create_white_embed("** Liste des protégés :**\n"+'\n'.join(f"• <@{i[0]}>"for i in d)))
 
 @bot.command()
 @commands.check(lambda ctx:ctx.author.id==ADMIN_USER_ID)
 async def pclear(ctx):
     c=clear_protect()
-    await ctx.send(embed=create_white_embed(f"✅ {c} protégé(s) retiré(s)."))
+    await ctx.send(embed=create_white_embed(f" Protection de {c} utilisateur retiré ."))
     await send_log(ctx,"protect",{"Action":"Vider protect","Par":ctx.author.mention,"Nombre":str(c)})
 
 if __name__=="__main__":
