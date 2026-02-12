@@ -26,50 +26,29 @@ def init_database():
 db_conn,db_cursor=init_database()
 print("✅ DB initialisée")
 
-def backup_database():
-    try:
-        import shutil
-        from datetime import datetime
-        if os.path.exists('akusa_bot.db'):
-            ts=datetime.now().strftime("%Y%m%d_%H%M%S")
-            shutil.copy2('akusa_bot.db',f'akusa_bot_backup_{ts}.db')
-            backups=sorted([f for f in os.listdir()if f.startswith('akusa_bot_backup_')])
-            for old in backups[:-5]:os.remove(old)
-    except:pass
-
-def restore_latest_backup():
-    try:
-        backups=sorted([f for f in os.listdir()if f.startswith('akusa_bot_backup_')])
-        if backups:
-            if os.path.exists('akusa_bot.db'):os.remove('akusa_bot.db')
-            shutil.copy2(backups[-1],'akusa_bot.db')
-            return True
-    except:pass
-    return False
-
 def add_to_blacklist(uid,uname,grade,reason,added_by,added_by_name,banned,on_server,ts):
     db_cursor.execute('INSERT OR REPLACE INTO blacklist VALUES(?,?,?,?,?,?,?,?,?)',(uid,uname,grade,reason,added_by,added_by_name,banned,on_server,ts))
-    db_conn.commit();backup_database()
+    db_conn.commit()
 def remove_from_blacklist(uid):
-    db_cursor.execute('DELETE FROM blacklist WHERE user_id=?',(uid,));db_conn.commit();backup_database()
+    db_cursor.execute('DELETE FROM blacklist WHERE user_id=?',(uid,));db_conn.commit()
 def get_blacklist():
     db_cursor.execute('SELECT*FROM blacklist ORDER BY timestamp DESC');return db_cursor.fetchall()
 def get_blacklist_user(uid):
     db_cursor.execute('SELECT*FROM blacklist WHERE user_id=?',(uid,));return db_cursor.fetchone()
 def clear_blacklist():
-    db_cursor.execute('DELETE FROM blacklist');db_conn.commit();backup_database();return db_cursor.rowcount
+    db_cursor.execute('DELETE FROM blacklist');db_conn.commit();return db_cursor.rowcount
 
 def add_to_whitelist(uid,uname,added_by,added_by_name,ts):
     db_cursor.execute('INSERT OR REPLACE INTO whitelist VALUES(?,?,?,?,?)',(uid,uname,added_by,added_by_name,ts))
-    db_conn.commit();backup_database()
+    db_conn.commit()
 def remove_from_whitelist(uid):
-    db_cursor.execute('DELETE FROM whitelist WHERE user_id=?',(uid,));db_conn.commit();backup_database();return db_cursor.rowcount>0
+    db_cursor.execute('DELETE FROM whitelist WHERE user_id=?',(uid,));db_conn.commit();return db_cursor.rowcount>0
 def is_in_whitelist(uid):
     db_cursor.execute('SELECT 1 FROM whitelist WHERE user_id=?',(uid,));return db_cursor.fetchone()is not None
 def get_whitelist():
     db_cursor.execute('SELECT*FROM whitelist ORDER BY timestamp DESC');return db_cursor.fetchall()
 def clear_whitelist():
-    db_cursor.execute('DELETE FROM whitelist');db_conn.commit();backup_database();return db_cursor.rowcount
+    db_cursor.execute('DELETE FROM whitelist');db_conn.commit();return db_cursor.rowcount
 
 def set_log_channel(gid,ltype,cid):
     db_cursor.execute('INSERT OR REPLACE INTO logs_config VALUES(?,?,?)',(gid,ltype,cid));db_conn.commit()
@@ -86,39 +65,39 @@ def get_bl_limit(uid):
 
 def set_user_grade(uid,gid,grade,granted_by,granted_by_name,ts):
     db_cursor.execute('INSERT OR REPLACE INTO user_grades VALUES(?,?,?,?,?,?)',(uid,gid,grade,granted_by,granted_by_name,ts))
-    db_conn.commit();backup_database()
+    db_conn.commit()
 def get_user_grade(uid,gid):
     if uid==ADMIN_USER_ID:return"Créateur++"
     db_cursor.execute('SELECT grade FROM user_grades WHERE user_id=? AND guild_id=?',(uid,gid))
     r=db_cursor.fetchone();return r[0]if r else None
 def remove_user_grade(uid,gid):
-    db_cursor.execute('DELETE FROM user_grades WHERE user_id=? AND guild_id=?',(uid,gid));db_conn.commit();backup_database();return db_cursor.rowcount>0
+    db_cursor.execute('DELETE FROM user_grades WHERE user_id=? AND guild_id=?',(uid,gid));db_conn.commit();return db_cursor.rowcount>0
 def get_all_users_with_grade(gid,grade):
     db_cursor.execute('SELECT user_id FROM user_grades WHERE guild_id=? AND grade=?',(gid,grade));return db_cursor.fetchall()
 
 def add_blocked_word(word,added_by,added_by_name,ts):
     db_cursor.execute('INSERT OR REPLACE INTO blocked_words VALUES(?,?,?,?)',(word.lower(),added_by,added_by_name,ts))
-    db_conn.commit();backup_database()
+    db_conn.commit()
 def remove_blocked_word(word):
-    db_cursor.execute('DELETE FROM blocked_words WHERE word=?',(word.lower(),));db_conn.commit();backup_database();return db_cursor.rowcount>0
+    db_cursor.execute('DELETE FROM blocked_words WHERE word=?',(word.lower(),));db_conn.commit();return db_cursor.rowcount>0
 def get_blocked_words():
     db_cursor.execute('SELECT word FROM blocked_words ORDER BY word ASC');return[r[0]for r in db_cursor.fetchall()]
 def clear_blocked_words():
-    db_cursor.execute('DELETE FROM blocked_words');db_conn.commit();backup_database();return db_cursor.rowcount
+    db_cursor.execute('DELETE FROM blocked_words');db_conn.commit();return db_cursor.rowcount
 def is_word_blocked(word):
     db_cursor.execute('SELECT 1 FROM blocked_words WHERE word=?',(word.lower(),));return db_cursor.fetchone()is not None
 
 def add_protect(uid,uname,added_by,added_by_name,ts):
     db_cursor.execute('INSERT OR REPLACE INTO protect VALUES(?,?,?,?,?)',(uid,uname,added_by,added_by_name,ts))
-    db_conn.commit();backup_database()
+    db_conn.commit()
 def remove_protect(uid):
-    db_cursor.execute('DELETE FROM protect WHERE user_id=?',(uid,));db_conn.commit();backup_database();return db_cursor.rowcount>0
+    db_cursor.execute('DELETE FROM protect WHERE user_id=?',(uid,));db_conn.commit();return db_cursor.rowcount>0
 def is_protected(uid):
     db_cursor.execute('SELECT 1 FROM protect WHERE user_id=?',(uid,));return db_cursor.fetchone()is not None
 def get_protect_list():
     db_cursor.execute('SELECT*FROM protect ORDER BY timestamp DESC');return db_cursor.fetchall()
 def clear_protect():
-    db_cursor.execute('DELETE FROM protect');db_conn.commit();backup_database();return db_cursor.rowcount
+    db_cursor.execute('DELETE FROM protect');db_conn.commit();return db_cursor.rowcount
 
 class PaginatorWithCounter(discord.ui.View):
     def __init__(self,embeds,total_items,timeout=3600):
@@ -157,6 +136,7 @@ BL_LIMITS={"Owner":3,"Sys":6,"Sys+":8,"Créateur":15,"Créateur++":9999}
 BL_COOLDOWN=7200
 
 async def get_user_by_id_or_mention(ctx,identifier):
+    if not identifier:return None,False
     try:
         if identifier.startswith('<@')and identifier.endswith('>'):
             uid=identifier[2:-1]
@@ -226,11 +206,7 @@ async def send_log(ctx,ltype,fields):
 async def on_ready():
     print(f"Bot connecté : {bot.user}")
     if len(get_blacklist())==0 and len(get_whitelist())==0:
-        if restore_latest_backup():
-            global db_conn,db_cursor
-            db_conn,db_cursor=init_database()
-            print("✅ DB restaurée depuis backup")
-    backup_database()
+        print("⚠️ DB vide au démarrage")
     await bot.change_presence(activity=discord.Game(name=f"{PREFIX}help"))
 
 @bot.before_invoke
@@ -258,7 +234,7 @@ async def help(ctx):
     e3.add_field(name="Gestion des grades",value="`&owner @user/id` - Donner grade Owner\n`&sys @user/id` - Donner grade Sys\n`&sys+ @user/id` - Donner grade Sys+\n`&crea @user/id` - Donner grade Créateur\n`&crea++ @user/id` - Donner grade Créateur++\n`&ungrade @user/id` - Retirer un grade\n`&grade @user/id` - Voir le grade d'un utilisateur\n\n_(sans argument: liste des utilisateurs ayant le grade)_",inline=False)
     e3.set_footer(text=f"Page 3/4 • {get_current_time_french()}")
     e4=discord.Embed(color=0xFFFFFF,description="Page 4/4 - Créateur++ uniquement\n")
-    e4.add_field(name="Commandes réservées",value="`&wl @user/id` - Ajouter à la whitelist\n`&unwl @user/id` - Retirer de la whitelist\n`&clearwl` - Vider la whitelist\n`&unblall` - Vider la blacklist\n`&unbanall` - Vider la liste des bannis\n`&protect @user/id` - Protéger un utilisateur\n`&protectlist` - Liste des protégés\n`&setlogs #salon` - Logs généraux\n`&setlogsbl #salon` - Logs BL\n`&setlogsunbl #salon` - Logs UNBL\n`&setlogsrank #salon` - Logs RANK\n`&setlogsunrank #salon` - Logs UNRANK\n`&setlogswl #salon` - Logs WL\n`&setlogsunwl #salon` - Logs UNWL\n`&help_logs` - Aide configuration logs",inline=False)
+    e4.add_field(name="Commandes réservées",value="`&wl @user/id` - Ajouter à la whitelist\n`&unwl @user/id` - Retirer de la whitelist\n`&clearwl` - Vider la whitelist\n`&unblall` - Vider la blacklist\n`&unbanall` - Vider la liste des bannis\n`&protect @user/id` - Protéger un utilisateur\n`&protectlist` - Liste des protégés\n`&savedb` - Sauvegarder la DB sur ton tel\n`&setdb` - Restaurer la DB depuis un fichier\n`&setlogs #salon` - Logs généraux\n`&setlogsbl #salon` - Logs BL\n`&setlogsunbl #salon` - Logs UNBL\n`&setlogsrank #salon` - Logs RANK\n`&setlogsunrank #salon` - Logs UNRANK\n`&setlogswl #salon` - Logs WL\n`&setlogsunwl #salon` - Logs UNWL\n`&help_logs` - Aide configuration logs",inline=False)
     e4.set_footer(text=f"Page 4/4 • {get_current_time_french()}")
     v=PaginatorWithCounter([e1,e2,e3,e4],4)
     await ctx.send(embed=e1,view=v)
@@ -299,7 +275,8 @@ async def handle_grade_command(ctx,mid,gname,gdisplay):
             except:ml.append(f"<@{uid}>\n`{uid}`")
         return await ctx.send(embed=create_white_embed(f"**Liste des {gdisplay}** ({len(users)}):\n\n"+"\n\n".join(ml)))
     r=await get_user_by_id_or_mention(ctx,mid)
-    if not r:return await ctx.send(embed=create_white_embed("Utilisateur introuvable."))
+    if not r or not r[0]:
+        return await ctx.send(embed=create_white_embed("❌ Utilisateur introuvable. Mentionne quelqu'un ou mets son ID."))
     m,ison=r
     eg=get_user_grade(ctx.author.id,ctx.guild.id)
     if ctx.author.id!=ADMIN_USER_ID:
@@ -314,7 +291,9 @@ async def handle_grade_command(ctx,mid,gname,gdisplay):
         set_user_grade(m.id,ctx.guild.id,gname,ctx.author.id,ctx.author.name,get_current_time_french())
         await ctx.send(embed=create_white_embed(f"{m.mention} a bien reçu le grade (**{gdisplay}**)"))
         await send_log(ctx,"rank",{"Donné par":f"{ctx.author.mention} ({'Créateur++'if ctx.author.id==ADMIN_USER_ID else eg})","À":m.mention,"Grade donné":gdisplay})
-    except:await ctx.send(embed=create_white_embed("Erreur technique. Impossible d'ajouter le grade."))
+    except Exception as e:
+        print(f"Erreur grade: {e}")
+        await ctx.send(embed=create_white_embed("Erreur technique. Impossible d'ajouter le grade."))
 
 @bot.command()
 @has_required_grade("Créateur")
@@ -343,7 +322,7 @@ async def crea_pp(ctx,member=None):await handle_grade_command(ctx,member,"Créat
 async def ungrade(ctx,member=None):
     if not member:return await ctx.send(embed=create_white_embed("Usage : `&ungrade @user/id`"))
     r=await get_user_by_id_or_mention(ctx,member)
-    if not r:return await ctx.send(embed=create_white_embed("Utilisateur introuvable."))
+    if not r or not r[0]:return await ctx.send(embed=create_white_embed("❌ Utilisateur introuvable."))
     m,ison=r;cg=get_user_grade(m.id,ctx.guild.id)
     if not cg:return await ctx.send(embed=create_white_embed(f"{m.mention} n'a aucun grade."))
     eg=get_user_grade(ctx.author.id,ctx.guild.id)
@@ -363,7 +342,7 @@ async def bl(ctx,identifier=None,*,reason=None):
         except:pass
     if not identifier:return await ctx.send(embed=create_white_embed("**Usage Incorrecte**\nUsage : `&bl id/@ raison`"))
     r=await get_user_by_id_or_mention(ctx,identifier)
-    if not r:return await ctx.send(embed=create_white_embed("Utilisateur introuvable."))
+    if not r or not r[0]:return await ctx.send(embed=create_white_embed("❌ Utilisateur introuvable."))
     tm,ison=r
     if tm.id==ctx.author.id:return await ctx.send(embed=create_white_embed("Wsh ? T'es con ou quoi? Tu veux te suicider?"))
     
@@ -422,7 +401,7 @@ async def unbl(ctx,identifier=None):
         except:pass
     if not identifier:return await ctx.send(embed=create_white_embed("MAUVAISE UTILISATION\nUsage : `&unbl id/@`"))
     r=await get_user_by_id_or_mention(ctx,identifier)
-    if not r:return await ctx.send(embed=create_white_embed("Utilisateur introuvable."))
+    if not r or not r[0]:return await ctx.send(embed=create_white_embed("❌ Utilisateur introuvable."))
     m,ison=r;ex=get_blacklist_user(m.id)
     if not ex:return await ctx.send(embed=create_white_embed("Cet utilisateur n'est pas dans la blacklist."))
     uid,uname,grade,reason,added_by,added_by_name,banned,on_server,ts=ex
@@ -487,7 +466,7 @@ async def bllist(ctx):
 @has_required_grade()
 async def blinfo(ctx,identifier):
     r=await get_user_by_id_or_mention(ctx,identifier)
-    if not r:return await ctx.send(embed=create_white_embed("Utilisateur introuvable."))
+    if not r or not r[0]:return await ctx.send(embed=create_white_embed("❌ Utilisateur introuvable."))
     m,ison=r;ex=get_blacklist_user(m.id)
     if not ex:return await ctx.send(embed=create_white_embed("Cet utilisateur n'est pas dans la blacklist."))
     uid,un,g,r,ab,abn,b,os,ts=ex
@@ -508,7 +487,7 @@ async def grade(ctx,identifier=None):
     if not identifier:tm,ison=ctx.author,True
     else:
         r=await get_user_by_id_or_mention(ctx,identifier)
-        if not r:return await ctx.send(embed=create_white_embed("Utilisateur introuvable."))
+        if not r or not r[0]:return await ctx.send(embed=create_white_embed("❌ Utilisateur introuvable."))
         tm,ison=r
     if ison and isinstance(tm,discord.Member):
         g=get_user_grade(tm.id,ctx.guild.id)
@@ -532,7 +511,7 @@ async def wl(ctx,identifier=None):
         except:pass
     if not identifier:return await ctx.send(embed=create_white_embed("MAUVAISE UTILISATION\nUsage : `&wl id/@`"))
     r=await get_user_by_id_or_mention(ctx,identifier)
-    if not r:return await ctx.send(embed=create_white_embed("Utilisateur introuvable."))
+    if not r or not r[0]:return await ctx.send(embed=create_white_embed("❌ Utilisateur introuvable."))
     m,ison=r
     if is_in_whitelist(m.id):
         await ctx.send(embed=create_white_embed(f"{m.mention} est déjà dans la whitelist."if ison else f"L'utilisateur `{m.name}` (ID: {m.id}) est déjà dans la whitelist."))
@@ -549,7 +528,7 @@ async def unwl(ctx,identifier=None):
         except:pass
     if not identifier:return await ctx.send(embed=create_white_embed("MAUVAISE UTILISATION\nUsage : `&unwl id/@`"))
     r=await get_user_by_id_or_mention(ctx,identifier)
-    if not r:return await ctx.send(embed=create_white_embed("Utilisateur introuvable."))
+    if not r or not r[0]:return await ctx.send(embed=create_white_embed("❌ Utilisateur introuvable."))
     m,ison=r
     if remove_from_whitelist(m.id):
         await ctx.send(embed=create_white_embed(f"{m.mention} retiré de la whitelist."if ison else f"L'utilisateur `{m.name}` (ID: {m.id}) retiré de la whitelist."))
@@ -641,20 +620,25 @@ async def ping(ctx):
 async def test(ctx):
     await ctx.send("Le bot répond !")
 
-@bot.command(name="backup")
+@bot.command()
 @commands.check(lambda ctx:ctx.author.id==ADMIN_USER_ID)
-async def manual_backup(ctx):
-    backup_database()
-    await ctx.send(embed=create_white_embed("✅ Sauvegarde de la base de données effectuée"))
+async def savedb(ctx):
+    try:
+        await ctx.author.send(file=discord.File('akusa_bot.db'))
+        await ctx.send(embed=create_white_embed("📩 DB envoyée en DM"))
+    except:await ctx.send(embed=create_white_embed("❌ Erreur envoi DM"))
 
-@bot.command(name="restore")
+@bot.command()
 @commands.check(lambda ctx:ctx.author.id==ADMIN_USER_ID)
-async def manual_restore(ctx):
-    if restore_latest_backup():
+async def setdb(ctx):
+    if not ctx.message.attachments:
+        return await ctx.send(embed=create_white_embed("❌ Attache le fichier .db"))
+    try:
+        await ctx.message.attachments[0].save('akusa_bot.db')
         global db_conn,db_cursor
         db_conn,db_cursor=init_database()
-        await ctx.send(embed=create_white_embed("✅ Base de données restaurée"))
-    else:await ctx.send(embed=create_white_embed("❌ Aucune sauvegarde trouvée"))
+        await ctx.send(embed=create_white_embed("✅ DB restaurée"))
+    except:await ctx.send(embed=create_white_embed("❌ Erreur restauration"))
 
 @bot.command(name="block")
 @commands.check(lambda ctx:ctx.author.id==ADMIN_USER_ID)
@@ -683,15 +667,15 @@ async def block(ctx,action=None,*,word=None):
 async def protect(ctx,*,id=None):
     if not id:return await ctx.send(embed=create_white_embed("Usage : `&protect @user/id`"))
     r=await get_user_by_id_or_mention(ctx,id)
-    if not r:return await ctx.send(embed=create_white_embed("Utilisateur introuvable."))
+    if not r or not r[0]:return await ctx.send(embed=create_white_embed("❌ Utilisateur introuvable."))
     m,ison=r
     if is_protected(m.id):
         remove_protect(m.id)
-        embed=create_white_embed(f" {m.mention} n'est plus protégé.")
+        embed=create_white_embed(f"🛡️ {m.mention} n'est plus protégé.")
         await send_log(ctx,"protect",{"Retiré par":ctx.author.mention,"Utilisateur":m.mention})
     else:
         add_protect(m.id,m.name,ctx.author.id,ctx.author.name,get_current_time_french())
-        embed=create_white_embed(f" {m.mention} est désormais protégé.")
+        embed=create_white_embed(f"🛡️ {m.mention} est désormais protégé.")
         await send_log(ctx,"protect",{"Ajouté par":ctx.author.mention,"Utilisateur":m.mention})
     await ctx.send(embed=embed)
 
@@ -700,13 +684,13 @@ async def protect(ctx,*,id=None):
 async def protectlist(ctx):
     d=get_protect_list()
     if not d:return await ctx.send(embed=create_white_embed("Aucun utilisateur protégé."))
-    await ctx.send(embed=create_white_embed("** Liste des protégés :**\n"+'\n'.join(f"• <@{i[0]}>"for i in d)))
+    await ctx.send(embed=create_white_embed("**🛡️ Liste des protégés :**\n"+'\n'.join(f"• <@{i[0]}>"for i in d)))
 
 @bot.command()
 @commands.check(lambda ctx:ctx.author.id==ADMIN_USER_ID)
 async def pclear(ctx):
     c=clear_protect()
-    await ctx.send(embed=create_white_embed(f" {c}Utilisateur ne sont plus proteger."))
+    await ctx.send(embed=create_white_embed(f"✅ {c} protégé(s) retiré(s)."))
     await send_log(ctx,"protect",{"Action":"Vider protect","Par":ctx.author.mention,"Nombre":str(c)})
 
 if __name__=="__main__":
