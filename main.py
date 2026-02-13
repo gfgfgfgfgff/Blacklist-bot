@@ -9,7 +9,7 @@ if not TOKEN:print("ERREUR: Token non défini!");sys.exit(1)
 PREFIX="&"
 THUMBNAIL_URL="https://cdn.discordapp.com/attachments/1467151867191496808/1467232922938638479/IMG_1620.jpg?ex=697fa2a4&is=697e5124&hm=a712241a364f6b68dc031cac0860e5e9b9af3f2df3e69c8f3b14e1817852ccde&"
 LOG_THUMBNAIL=THUMBNAIL_URL
-ADMIN_USER_ID= [1399234120214909010,1425947830463365120]
+ADMIN_USER_ID=1399234120214909010
 
 def init_database():
     conn=sqlite3.connect('akusa_bot.db',check_same_thread=False)
